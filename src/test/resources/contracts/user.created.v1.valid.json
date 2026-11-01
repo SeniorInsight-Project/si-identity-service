@@ -1,0 +1,18 @@
+{
+  "specversion": "1.0",
+  "id": "0f8a6c1e-3b2d-4e5f-9a7b-1c2d3e4f5a6b",
+  "source": "/identity-service",
+  "type": "user.created",
+  "time": "2026-10-31T12:00:00Z",
+  "datacontenttype": "application/json",
+  "dataschema": "https://raw.githubusercontent.com/SeniorInsight-Project/si-contracts/main/events/user.created.v1.json",
+  "subject": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "data": {
+    "perfilId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "keycloakSub": "f1e2d3c4-b5a6-4789-8abc-def012345678",
+    "tipo": "IDOSO",
+    "nome": "Maria Aparecida da Silva",
+    "email": null,
+    "criadoEm": "2026-10-31T12:00:00Z"
+  }
+}

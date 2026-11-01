@@ -54,7 +54,20 @@ O usuário do banco precisa poder criar o schema `identity` (ou o schema precisa
 | `GET /actuator/health` (e `/liveness`, `/readiness`) | público |
 | `/swagger-ui.html` e `/v3/api-docs` | público |
 | `GET /v1/eu` — devolve o `sub` e as roles do token, sem consultar o banco | token do Keycloak |
+| `GET /v1/me` — perfil do usuário autenticado (ver abaixo) | token do Keycloak |
 | todo o resto | token do Keycloak |
+
+No gateway, `/api/v1/identity/**` é roteado para `/v1/**` deste serviço: o app chama `GET /api/v1/identity/me`.
+
+### `GET /v1/me`
+
+Devolve o schema `Perfil` do contrato (`openapi/identity-v1.yaml` do si-contracts): `id`, `tipo` (`FAMILIAR`/`IDOSO`), `nome`, `email` (pode ser `null`), `criadoEm` e `atualizadoEm`.
+
+- **Primeiro acesso de um familiar:** se não existe perfil para o `sub` do token e o token tem a role `familiar` (o realm dá essa role a quem se cadastra), o perfil `FAMILIAR` é criado com o nome do claim `name` (ou `preferred_username`) e o e-mail do claim `email`, e o evento `user.created` é gravado na outbox **na mesma transação**.
+- **Acessos seguintes:** só leem o perfil; nenhum evento é publicado.
+- **Sem perfil e sem a role `familiar`:** `404` com o corpo de erro padrão (`timestamp`, `status`, `error`, `message`, `path`). O perfil `IDOSO` nasce no pareamento (HU-007).
+- **Sem token ou token inválido:** `401`.
+- **Primeiro acesso concorrente:** o insert usa `ON CONFLICT (keycloak_sub) DO NOTHING`; quem perde a corrida relê o perfil criado pela outra requisição. Resultado: um perfil, um evento, nenhum erro 500.
 
 ## Variáveis de ambiente
 
@@ -88,11 +101,33 @@ O serviço não tem login nem emite tokens: valida o JWT do Keycloak pelo issuer
 Quem precisa publicar um evento chama a porta `PublicadorEventos` dentro da transação do caso de uso. O evento é gravado na tabela `outbox_evento` junto com a mudança de estado, e um job agendado (`RelayOutbox`) publica os pendentes:
 
 - exchange topic `si.events` (declarada pelo serviço), routing key = tipo do evento (ex.: `user.created`);
-- corpo JSON com os campos do evento; `message_id` = id da linha na outbox, `type` = tipo do evento, headers `tipo_agregado` e `agregado_id`;
+- corpo = envelope [CloudEvents 1.0](https://github.com/cloudevents/spec/blob/v1.0.2/cloudevents/spec.md) em modo estruturado (`content_type: application/json`), como exigem os contratos de `events/` do si-contracts:
+
+  | Atributo | Valor |
+  |---|---|
+  | `specversion` | `1.0` |
+  | `id` | id da linha na outbox (o mesmo valor do `message_id` AMQP) |
+  | `source` | `/identity-service` |
+  | `type` | tipo do evento, ex.: `user.created` |
+  | `time` | instante em que o evento foi gravado na outbox |
+  | `datacontenttype` | `application/json` |
+  | `dataschema` | `https://raw.githubusercontent.com/SeniorInsight-Project/si-contracts/main/events/<tipo>.v1.json` |
+  | `subject` | id do agregado de origem |
+  | `data` | os campos do evento |
+
+- propriedades AMQP: `message_id` = id da linha na outbox, `type` = tipo do evento, `app_id` = `identity-service`, headers `tipo_agregado` e `agregado_id`;
 - publisher confirms: só marca `publicado_em` depois do ack do broker; em falha incrementa `tentativas` e tenta de novo no próximo ciclo;
 - `FOR UPDATE SKIP LOCKED` permite várias réplicas rodando o relay.
 
-A entrega é "pelo menos uma vez": consumidores devem ser idempotentes, deduplicando pelo `message_id`.
+A entrega é "pelo menos uma vez": consumidores devem ser idempotentes, deduplicando pelo `message_id` (ou pelo `id` do envelope, que é o mesmo valor).
+
+### Eventos publicados
+
+| Routing key | Quando | `data` | Contrato |
+|---|---|---|---|
+| `user.created` | primeiro `GET /v1/me` de um familiar (perfil criado) | `perfilId`, `keycloakSub`, `tipo`, `nome`, `email` (ou `null`), `criadoEm` | [`events/user.created.v1.json`](https://github.com/SeniorInsight-Project/si-contracts/blob/develop/events/user.created.v1.json) |
+
+O consumidor do `user.created` é o si-care-service (fila `care.q`, criada por ele). O teste `ContratoUserCreatedTest` valida o payload contra uma cópia do schema em `src/test/resources/contracts/`; ao mudar o contrato no si-contracts, atualize a cópia.
 
 ## Testes
 
@@ -100,7 +135,7 @@ A entrega é "pelo menos uma vez": consumidores devem ser idempotentes, deduplic
 mvn verify
 ```
 
-Precisa de Docker: os testes de integração sobem PostgreSQL e RabbitMQ com Testcontainers. O mesmo comando roda no CI (`.github/workflows/ci.yml`) em push e PR para `develop` e `main`.
+Precisa de Docker: os testes de integração sobem PostgreSQL e RabbitMQ com Testcontainers, e o `PrimeiroAcessoTest` sobe também um Keycloak 26 com um realm mínimo de teste (`src/test/resources/keycloak/realm-teste.json`, com um client público que só existe ali e usuários com senha de teste) para obter tokens reais. O mesmo comando roda no CI (`.github/workflows/ci.yml`) em push e PR para `develop` e `main`.
 
 ## Docker
 
