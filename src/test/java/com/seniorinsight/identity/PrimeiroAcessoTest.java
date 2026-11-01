@@ -76,7 +76,8 @@ class PrimeiroAcessoTest {
 
     @BeforeEach
     void filaLigadaAoUserCreated() {
-        Queue fila = new Queue(FILA, false, false, true);
+        // Sem auto-delete: o receive com timeout usa um consumer, e a fila sumiria quando ele saísse.
+        Queue fila = new Queue(FILA, false, false, false);
         amqpAdmin.declareQueue(fila);
         Binding ligacao = BindingBuilder.bind(fila).to(new TopicExchange("si.events")).with("user.created");
         amqpAdmin.declareBinding(ligacao);
