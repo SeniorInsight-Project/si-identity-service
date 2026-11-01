@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/SeniorInsight-Project/si-contracts/main/events/user.created.v1.json",
+  "title": "user.created v1",
+  "description": "Perfil criado no identity-service (cadastro do familiar ou resgate do pareamento do idoso). CloudEvents 1.0 em modo estruturado, publicado na exchange si.events com routing key user.created.",
+  "type": "object",
+  "required": ["specversion", "id", "source", "type", "time", "datacontenttype", "dataschema", "subject", "data"],
+  "properties": {
+    "specversion": { "const": "1.0" },
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Id único do evento (= id da linha na outbox). Consumidores deduplicam por ele."
+    },
+    "source": { "const": "/identity-service" },
+    "type": { "const": "user.created" },
+    "time": { "type": "string", "format": "date-time" },
+    "datacontenttype": { "const": "application/json" },
+    "dataschema": { "const": "https://raw.githubusercontent.com/SeniorInsight-Project/si-contracts/main/events/user.created.v1.json" },
+    "subject": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Id do perfil criado (agregado de origem)."
+    },
+    "data": { "$ref": "#/$defs/UserCreated" }
+  },
+  "propertyNames": {
+    "description": "Atributos de extensão do CloudEvents: só letras minúsculas e dígitos.",
+    "pattern": "^[a-z0-9]{1,20}$"
+  },
+  "$defs": {
+    "UserCreated": {
+      "type": "object",
+      "required": ["perfilId", "keycloakSub", "tipo", "nome", "criadoEm"],
+      "additionalProperties": false,
+      "properties": {
+        "perfilId": { "type": "string", "format": "uuid" },
+        "keycloakSub": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255,
+          "description": "Claim sub do usuário no Keycloak."
+        },
+        "tipo": { "enum": ["FAMILIAR", "IDOSO"] },
+        "nome": { "type": "string", "minLength": 1, "maxLength": 150 },
+        "email": {
+          "type": ["string", "null"],
+          "format": "email",
+          "maxLength": 320,
+          "description": "Nulo para o idoso pareado por código/QR."
+        },
+        "criadoEm": { "type": "string", "format": "date-time" }
+      }
+    }
+  }
+}

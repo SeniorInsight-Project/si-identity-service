@@ -20,6 +20,8 @@
         <java.version>21</java.version>
         <springdoc.version>2.9.1</springdoc.version>
         <archunit.version>1.5.1</archunit.version>
+        <testcontainers-keycloak.version>3.7.0</testcontainers-keycloak.version>
+        <json-schema-validator.version>1.5.6</json-schema-validator.version>
     </properties>
 
     <dependencies>
@@ -100,6 +102,18 @@
             <groupId>com.tngtech.archunit</groupId>
             <artifactId>archunit-junit5</artifactId>
             <version>${archunit.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.github.dasniko</groupId>
+            <artifactId>testcontainers-keycloak</artifactId>
+            <version>${testcontainers-keycloak.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.networknt</groupId>
+            <artifactId>json-schema-validator</artifactId>
+            <version>${json-schema-validator.version}</version>
             <scope>test</scope>
         </dependency>
     </dependencies>
