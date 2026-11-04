@@ -10,7 +10,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 
 /**
- * Contexto completo com PostgreSQL e RabbitMQ do Testcontainers. Todos os testes de integração usam a mesma
+ * Contexto completo com PostgreSQL, RabbitMQ e Redis do Testcontainers. Todos os testes de integração usam a mesma
  * configuração, então o Spring reaproveita um único contexto (e um único par de containers).
  *
  * <p>O issuer do Keycloak é fictício: o decoder só é criado na primeira validação de token, e os testes autenticam

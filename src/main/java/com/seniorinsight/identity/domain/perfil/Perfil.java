@@ -31,6 +31,11 @@ public final class Perfil {
         return new Perfil(UUID.randomUUID(), keycloakSub, TipoPerfil.FAMILIAR, nome, email, agora, agora);
     }
 
+    /** Novo perfil de idoso, criado no resgate do código de pareamento. O idoso não tem e-mail. */
+    public static Perfil novoIdoso(String keycloakSub, String nome, Instant agora) {
+        return new Perfil(UUID.randomUUID(), keycloakSub, TipoPerfil.IDOSO, nome, null, agora, agora);
+    }
+
     public UUID id() {
         return id;
     }

@@ -1,0 +1,73 @@
+{
+  "realm": "seniorinsight",
+  "enabled": true,
+  "sslRequired": "none",
+  "registrationEmailAsUsername": true,
+  "loginWithEmailAllowed": true,
+  "roles": {
+    "realm": [
+      { "name": "familiar", "description": "Familiar ou cuidador responsável por um idoso" },
+      { "name": "idoso", "description": "Pessoa idosa monitorada" },
+      { "name": "offline_access", "description": "${role_offline-access}" },
+      { "name": "uma_authorization", "description": "${role_uma_authorization}" },
+      {
+        "name": "default-roles-seniorinsight",
+        "description": "Como no si-infra: quem se cadastra ganha familiar",
+        "composite": true,
+        "composites": { "realm": ["offline_access", "uma_authorization", "familiar"] }
+      }
+    ]
+  },
+  "defaultRole": { "name": "default-roles-seniorinsight" },
+  "clients": [
+    {
+      "clientId": "si-teste",
+      "name": "Cliente só dos testes de integração",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": true
+    },
+    {
+      "clientId": "si-identity-service",
+      "name": "Como no si-infra, com secret de teste",
+      "enabled": true,
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "segredo-de-teste",
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "attributes": { "standard.token.exchange.enabled": "true" }
+    }
+  ],
+  "users": [
+    {
+      "username": "service-account-si-identity-service",
+      "enabled": true,
+      "serviceAccountClientId": "si-identity-service",
+      "clientRoles": {
+        "realm-management": ["manage-users", "view-users", "query-users", "query-groups", "impersonation"]
+      }
+    },
+    {
+      "username": "ana.souza@example.com",
+      "enabled": true,
+      "firstName": "Ana",
+      "lastName": "Souza",
+      "email": "ana.souza@example.com",
+      "emailVerified": true,
+      "credentials": [{ "type": "password", "value": "senha-de-teste", "temporary": false }],
+      "realmRoles": ["default-roles-seniorinsight"]
+    },
+    {
+      "username": "medico@example.com",
+      "enabled": true,
+      "firstName": "Sem",
+      "lastName": "Familiar",
+      "email": "medico@example.com",
+      "emailVerified": true,
+      "credentials": [{ "type": "password", "value": "senha-de-teste", "temporary": false }]
+    }
+  ]
+}

@@ -28,6 +28,18 @@ spring:
     virtual-host: ${RABBITMQ_VHOST:/}
     publisher-confirm-type: correlated
 
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+
+  http:
+    client:
+      # Chamadas ao Keycloak e ao care-service: sem timeout, uma dependência travada prende a requisição.
+      connect-timeout: 3s
+      read-timeout: 10s
+
   security:
     oauth2:
       resourceserver:
@@ -55,3 +67,18 @@ identity:
       intervalo: PT1S
       tamanho-lote: 100
       timeout-confirmacao: PT5S
+  pareamento:
+    # RN-020 diz 24 h; o contrato (openapi/identity-v1.yaml) diz "poucos minutos". Ajustável até o time decidir.
+    validade: ${IDENTITY_PAREAMENTO_VALIDADE:PT24H}
+    # Depois de vencido ou resgatado, o código ainda responde 410/409 (em vez de 404) por este tempo.
+    retencao: ${IDENTITY_PAREAMENTO_RETENCAO:PT24H}
+  keycloak:
+    # Endereço do Keycloak visto de dentro do serviço (pode diferir do issuer, que é o endereço público).
+    url: ${KEYCLOAK_URL:http://localhost:8180}
+    realm: ${KEYCLOAK_REALM:seniorinsight}
+    client-id: ${KEYCLOAK_CLIENT_ID:si-identity-service}
+    client-secret: ${KEYCLOAK_CLIENT_SECRET:}
+    dominio-email-idoso: ${KEYCLOAK_DOMINIO_EMAIL_IDOSO:idoso.seniorinsight.invalid}
+  care-service:
+    url: ${CARE_SERVICE_URL:http://localhost:8081}
+    papeis-administrador: ${CARE_SERVICE_PAPEIS_ADMINISTRADOR:ADMINISTRADOR}
