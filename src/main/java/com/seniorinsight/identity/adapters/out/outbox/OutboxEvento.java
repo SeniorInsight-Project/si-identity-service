@@ -4,21 +4,30 @@ import java.time.Instant;
 import java.util.UUID;
 
 import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.PostLoad;
+import jakarta.persistence.PostPersist;
 import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
+import org.springframework.data.domain.Persistable;
 
-/** Linha da tabela {@code outbox_evento}: evento gravado na transação do caso de uso, aguardando publicação. */
+/**
+ * Linha da tabela {@code outbox_evento}: evento gravado na transação do caso de uso, aguardando publicação.
+ *
+ * <p>O id é gerado em Java porque também vai no envelope CloudEvents do payload. {@link Persistable} faz o
+ * {@code save} inserir direto, sem o SELECT que o Spring Data faria para uma entidade com id preenchido.
+ */
 @Entity
 @Table(name = "outbox_evento")
-class OutboxEvento {
+class OutboxEvento implements Persistable<UUID> {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
+
+    @Transient
+    private boolean novo = true;
 
     private String tipoAgregado;
 
@@ -38,7 +47,9 @@ class OutboxEvento {
     protected OutboxEvento() {
     }
 
-    OutboxEvento(String tipoAgregado, UUID agregadoId, String tipoEvento, String payload, Instant criadoEm) {
+    OutboxEvento(UUID id, String tipoAgregado, UUID agregadoId, String tipoEvento, String payload,
+                 Instant criadoEm) {
+        this.id = id;
         this.tipoAgregado = tipoAgregado;
         this.agregadoId = agregadoId;
         this.tipoEvento = tipoEvento;
@@ -54,7 +65,19 @@ class OutboxEvento {
         this.tentativas++;
     }
 
-    UUID getId() {
+    @PostLoad
+    @PostPersist
+    void marcarExistente() {
+        this.novo = false;
+    }
+
+    @Override
+    public boolean isNew() {
+        return novo;
+    }
+
+    @Override
+    public UUID getId() {
         return id;
     }
 

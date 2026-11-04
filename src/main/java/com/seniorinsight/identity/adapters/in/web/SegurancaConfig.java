@@ -5,6 +5,7 @@ import java.util.Collection;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -15,10 +16,13 @@ import org.springframework.security.web.SecurityFilterChain;
 
 /**
  * Resource server: valida o JWT emitido pelo Keycloak ({@code spring.security.oauth2.resourceserver.jwt.issuer-uri})
- * e não tem login próprio. Só o health do actuator e o Swagger são públicos.
+ * e não tem login próprio. São públicos o health do actuator, o Swagger e o resgate do código de
+ * pareamento; gerar o código exige a role {@code familiar}.
  */
 @Configuration(proxyBeanMethods = false)
 public class SegurancaConfig {
+
+    static final String PAPEL_FAMILIAR = "familiar";
 
     private static final String[] ROTAS_PUBLICAS = {
         "/actuator/health", "/actuator/health/**",
@@ -35,6 +39,9 @@ public class SegurancaConfig {
                 .sessionManagement(sessao -> sessao.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(rotas -> rotas
                         .requestMatchers(ROTAS_PUBLICAS).permitAll()
+                        // O app do idoso ainda não tem conta quando resgata o código.
+                        .requestMatchers(HttpMethod.POST, "/v1/pareamentos/resgates").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/v1/pareamentos/codigos").hasRole(PAPEL_FAMILIAR)
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(rs -> rs.jwt(jwt -> jwt.jwtAuthenticationConverter(conversorAutenticacao())))
                 .build();

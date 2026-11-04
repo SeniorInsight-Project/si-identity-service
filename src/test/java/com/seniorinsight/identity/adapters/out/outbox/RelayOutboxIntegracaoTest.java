@@ -7,6 +7,7 @@ import static org.awaitility.Awaitility.await;
 import java.time.Duration;
 import java.util.UUID;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.seniorinsight.identity.TesteIntegracao;
 import com.seniorinsight.identity.application.porta.saida.PublicadorEventos;
@@ -27,6 +28,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 @TesteIntegracao
 class RelayOutboxIntegracaoTest {
 
+    private static final String ROUTING_KEY = "teste.relay";
+
     @Autowired
     PublicadorEventos publicador;
 
@@ -46,26 +49,35 @@ class RelayOutboxIntegracaoTest {
     ObjectMapper objectMapper;
 
     @Test
-    void publicaNaExchangeSiEventsComRoutingKeyIgualAoTipoDoEventoEMarcaPublicado() throws Exception {
+    void publicaOEnvelopeNaExchangeSiEventsComRoutingKeyIgualAoTipoDoEventoEMarcaPublicado() throws Exception {
         Queue fila = amqpAdmin.declareQueue();
         amqpAdmin.declareBinding(BindingBuilder.bind(fila)
                 .to(new TopicExchange(OutboxConfig.EXCHANGE_EVENTOS))
-                .with("user.created"));
+                .with(ROUTING_KEY));
         UUID perfilId = UUID.randomUUID();
 
-        transacao.executeWithoutResult(status -> publicador.publicar(new PerfilCriado(perfilId, "Maria")));
+        transacao.executeWithoutResult(status -> publicador.publicar(new EventoTeste(perfilId, "Maria")));
 
         Message mensagem = rabbitTemplate.receive(fila.getName(), Duration.ofSeconds(15).toMillis());
         assertThat(mensagem).as("mensagem publicada pelo relay").isNotNull();
         MessageProperties propriedades = mensagem.getMessageProperties();
         assertThat(propriedades.getReceivedExchange()).isEqualTo("si.events");
-        assertThat(propriedades.getReceivedRoutingKey()).isEqualTo("user.created");
-        assertThat(propriedades.getType()).isEqualTo("user.created");
+        assertThat(propriedades.getReceivedRoutingKey()).isEqualTo(ROUTING_KEY);
+        assertThat(propriedades.getType()).isEqualTo(ROUTING_KEY);
         assertThat(propriedades.getContentType()).isEqualTo(MessageProperties.CONTENT_TYPE_JSON);
         assertThat(propriedades.getAppId()).isEqualTo("identity-service");
         assertThat(propriedades.<String>getHeader("tipo_agregado")).isEqualTo("perfil");
         assertThat(propriedades.<String>getHeader("agregado_id")).isEqualTo(perfilId.toString());
-        assertThat(objectMapper.readTree(mensagem.getBody()))
+
+        JsonNode envelope = objectMapper.readTree(mensagem.getBody());
+        assertThat(envelope.get("specversion").asText()).isEqualTo("1.0");
+        assertThat(envelope.get("id").asText()).isEqualTo(propriedades.getMessageId());
+        assertThat(envelope.get("source").asText()).isEqualTo("/identity-service");
+        assertThat(envelope.get("type").asText()).isEqualTo(ROUTING_KEY);
+        assertThat(envelope.get("subject").asText()).isEqualTo(perfilId.toString());
+        assertThat(envelope.get("datacontenttype").asText()).isEqualTo("application/json");
+        assertThat(envelope.get("time").asText()).isNotBlank();
+        assertThat(envelope.get("data"))
                 .isEqualTo(objectMapper.createObjectNode().put("perfilId", perfilId.toString()).put("nome", "Maria"));
 
         UUID eventoId = UUID.fromString(propriedades.getMessageId());
@@ -82,7 +94,7 @@ class RelayOutboxIntegracaoTest {
         UUID perfilId = UUID.randomUUID();
 
         transacao.executeWithoutResult(status -> {
-            publicador.publicar(new PerfilCriado(perfilId, "João"));
+            publicador.publicar(new EventoTeste(perfilId, "João"));
             status.setRollbackOnly();
         });
 
@@ -91,11 +103,12 @@ class RelayOutboxIntegracaoTest {
 
     @Test
     void publicarExigeTransacaoAtiva() {
-        assertThatThrownBy(() -> publicador.publicar(new PerfilCriado(UUID.randomUUID(), "Ana")))
+        assertThatThrownBy(() -> publicador.publicar(new EventoTeste(UUID.randomUUID(), "Ana")))
                 .isInstanceOf(IllegalTransactionStateException.class);
     }
 
-    record PerfilCriado(UUID perfilId, String nome) implements EventoDominio {
+    /** Routing key própria, para não receber eventos reais publicados por outros testes do mesmo contexto. */
+    record EventoTeste(UUID perfilId, String nome) implements EventoDominio {
 
         @Override
         public String tipoAgregado() {
@@ -109,7 +122,7 @@ class RelayOutboxIntegracaoTest {
 
         @Override
         public String tipoEvento() {
-            return "user.created";
+            return ROUTING_KEY;
         }
     }
 }

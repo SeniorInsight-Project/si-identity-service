@@ -2,7 +2,7 @@ package com.seniorinsight.identity;
 
 import org.springframework.boot.SpringApplication;
 
-/** Sobe o serviço localmente com PostgreSQL e RabbitMQ do Testcontainers: {@code mvn spring-boot:test-run}. */
+/** Sobe o serviço localmente com PostgreSQL, RabbitMQ e Redis do Testcontainers: {@code mvn spring-boot:test-run}. */
 public class TestIdentityServiceApplication {
 
     public static void main(String[] args) {
