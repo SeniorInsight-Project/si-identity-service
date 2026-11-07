@@ -67,6 +67,11 @@ identity:
       intervalo: PT1S
       tamanho-lote: 100
       timeout-confirmacao: PT5S
+  republicacao:
+    familiares:
+      # Backfill do care-service: ligue uma vez para regravar o user.created de todos os familiares na outbox.
+      habilitada: ${IDENTITY_REPUBLICAR_FAMILIARES:false}
+      tamanho-lote: ${IDENTITY_REPUBLICAR_FAMILIARES_LOTE:200}
   pareamento:
     # RN-020 diz 24 h; o contrato (openapi/identity-v1.yaml) diz "poucos minutos". Ajustável até o time decidir.
     validade: ${IDENTITY_PAREAMENTO_VALIDADE:PT24H}
