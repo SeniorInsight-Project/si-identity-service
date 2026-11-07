@@ -1,8 +1,11 @@
 package com.seniorinsight.identity.application.porta.saida;
 
+import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 import com.seniorinsight.identity.domain.perfil.Perfil;
+import com.seniorinsight.identity.domain.perfil.TipoPerfil;
 
 public interface RepositorioPerfis {
 
@@ -17,4 +20,7 @@ public interface RepositorioPerfis {
      * @return {@code true} se o perfil foi inserido
      */
     boolean inserirSeAusente(Perfil perfil);
+
+    /** Até {@code limite} perfis do tipo com id maior que {@code depoisDe}, em ordem de id (paginação por chave). */
+    List<Perfil> listarPorTipoApos(TipoPerfil tipo, UUID depoisDe, int limite);
 }
