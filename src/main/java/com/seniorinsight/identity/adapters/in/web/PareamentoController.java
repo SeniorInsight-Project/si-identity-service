@@ -84,7 +84,7 @@ public class PareamentoController {
         ResgatarCodigoPareamento.Resultado resultado = resgatarCodigo.executar(new ResgatarCodigoPareamento.Comando(
                 requisicao.codigo(), requisicao.identificadorAparelho(), requisicao.plataforma()));
         return new ResultadoPareamentoResponse(PerfilResponse.de(resultado.perfil()), resultado.sessaoAparelhoId(),
-                TokensResponse.de(resultado.tokens()));
+                resultado.idosoId(), TokensResponse.de(resultado.tokens()));
     }
 
     @Schema(name = "GerarCodigoPareamentoRequest")
@@ -118,6 +118,10 @@ public class PareamentoController {
     public record ResultadoPareamentoResponse(
             @Schema(requiredMode = Schema.RequiredMode.REQUIRED) PerfilResponse perfil,
             @Schema(requiredMode = Schema.RequiredMode.REQUIRED) UUID sessaoAparelhoId,
+            @Schema(nullable = true, description = "Id do idoso no care-service, o mesmo informado ao gerar o código. "
+                    + "O app do idoso usa esse id nas rotas por idoso (consentimentos, exclusão); null quando o código "
+                    + "foi gerado sem idosoId.")
+            UUID idosoId,
             @Schema(requiredMode = Schema.RequiredMode.REQUIRED) TokensResponse tokens) {
     }
 
