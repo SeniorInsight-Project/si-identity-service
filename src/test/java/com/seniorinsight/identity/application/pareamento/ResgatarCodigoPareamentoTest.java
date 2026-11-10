@@ -73,6 +73,20 @@ class ResgatarCodigoPareamentoTest {
                         && sessao.plataforma() == Plataforma.IOS
                         && sessao.pareadoPor().equals("sub-ana")));
         verify(codigos, never()).devolver(any(), any());
+        assertThat(resultado.idosoId()).isNull();
+    }
+
+    @Test
+    void codigoComIdosoIdDevolveOIdosoIdNoResultado() {
+        UUID idosoId = UUID.randomUUID();
+        CodigoPareamento comIdoso = new CodigoPareamento("K7P2QX", "sub-ana", "Maria", idosoId, codigo.expiraEm());
+        when(codigos.consumir(anyString(), any(), any())).thenReturn(new Consumo.Resgatado(comIdoso));
+        when(provedor.obterOuCriarUsuarioIdoso(eq(idosoId), eq("Maria"))).thenReturn("sub-idoso");
+        when(perfis.buscarPorKeycloakSub("sub-idoso")).thenReturn(Optional.empty());
+        when(perfis.inserirSeAusente(any())).thenReturn(true);
+        when(provedor.emitirTokens("sub-idoso")).thenReturn(TOKENS);
+
+        assertThat(casoDeUso.executar(comando).idosoId()).isEqualTo(idosoId);
     }
 
     @Test
