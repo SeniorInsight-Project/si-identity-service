@@ -121,6 +121,8 @@ O `application.yml` não tem segredos; tudo vem do ambiente. O modelo está no [
 | `CARE_SERVICE_PAPEIS_ADMINISTRADOR` | `ADMINISTRADOR` | Valores de `papelAcesso` (separados por vírgula) que contam como Familiar Administrador |
 | `IDENTITY_PAREAMENTO_VALIDADE` | `PT24H` | Validade do código de pareamento |
 | `IDENTITY_PAREAMENTO_RETENCAO` | `PT24H` | Quanto tempo o código vencido ou usado ainda responde 410/409 |
+| `IDENTITY_REPUBLICAR_FAMILIARES` | `false` | Ligue uma vez para regravar na outbox o `user.created` de todos os familiares (backfill do care-service) |
+| `IDENTITY_REPUBLICAR_FAMILIARES_LOTE` | `200` | Tamanho do lote da republicação |
 | `SERVER_PORT` | `8080` | Porta HTTP |
 
 `KEYCLOAK_ISSUER_URI` precisa ser **exatamente** o valor do claim `iss` dos tokens e precisa ser acessível de dentro do serviço (é dele que vêm as chaves públicas). Em Docker, configure o hostname do Keycloak (`KC_HOSTNAME`) para que o issuer seja o mesmo dentro e fora da rede dos containers.
@@ -217,3 +219,7 @@ O compose ainda não existe (nasce na si-infra#1). Trecho pronto para colar em `
 ```
 
 O healthcheck já vem da imagem, então o gateway pode usar `depends_on: { identity-service: { condition: service_healthy } }`.
+
+### Backfill do care-service
+
+Familiares cadastrados antes de o care-service consumir o `user.created` não têm Familiar lá. Para criá-los, suba o identity uma vez com `IDENTITY_REPUBLICAR_FAMILIARES=true`: ao iniciar, ele grava de novo na outbox um `user.created` (com id novo) para cada perfil FAMILIAR, em lotes, e o relay publica. Depois desligue a variável. O care ignora quem já existe pelo `keycloakSub`, então repetir é seguro.

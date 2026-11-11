@@ -1,9 +1,12 @@
 package com.seniorinsight.identity.adapters.out.persistencia;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import com.seniorinsight.identity.domain.perfil.TipoPerfil;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -12,6 +15,12 @@ import org.springframework.data.repository.query.Param;
 interface PerfilJpaRepository extends JpaRepository<PerfilEntidade, UUID> {
 
     Optional<PerfilEntidade> findByKeycloakSub(String keycloakSub);
+
+    List<PerfilEntidade> findByTipoAndIdGreaterThanOrderByIdAsc(TipoPerfil tipo, UUID id, Pageable pagina);
+
+    @Modifying
+    @Query("UPDATE PerfilEntidade p SET p.nome = :nome, p.atualizadoEm = :atualizadoEm WHERE p.id = :id")
+    int atualizarNome(@Param("id") UUID id, @Param("nome") String nome, @Param("atualizadoEm") Instant atualizadoEm);
 
     /**
      * {@code ON CONFLICT DO NOTHING} no unique de {@code keycloak_sub}: se outra transação inseriu o mesmo sub, o

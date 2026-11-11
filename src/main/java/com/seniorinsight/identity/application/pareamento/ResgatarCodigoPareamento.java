@@ -82,7 +82,7 @@ public class ResgatarCodigoPareamento {
         sessoes.registrar(sessao);
         // Por último: se o Keycloak recusar, a transação volta e não fica sessão sem token.
         Tokens tokens = provedor.emitirTokens(sub);
-        return new Resultado(perfil, sessao.id(), tokens);
+        return new Resultado(perfil, sessao.id(), codigo.idosoId(), tokens);
     }
 
     private Perfil criarPerfil(String sub, String nome, Instant agora) {
@@ -116,6 +116,7 @@ public class ResgatarCodigoPareamento {
         }
     }
 
-    public record Resultado(Perfil perfil, UUID sessaoAparelhoId, Tokens tokens) {
+    /** {@code idosoId} é o id do idoso no care-service informado ao gerar o código, ou null quando não houve. */
+    public record Resultado(Perfil perfil, UUID sessaoAparelhoId, UUID idosoId, Tokens tokens) {
     }
 }
