@@ -12,6 +12,9 @@ public interface ProvedorIdentidade {
      */
     String obterOuCriarUsuarioIdoso(UUID chave, String nome);
 
+    /** Atualiza o nome do usuário na Admin API, para o claim {@code name} dos próximos tokens trazer o nome novo. */
+    void atualizarNome(String keycloakSub, String nome);
+
     /** Emite os tokens do usuário por token exchange (impersonação pela service account do serviço). */
     Tokens emitirTokens(String keycloakSub);
 

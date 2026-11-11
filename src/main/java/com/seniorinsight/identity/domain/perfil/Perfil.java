@@ -36,6 +36,11 @@ public final class Perfil {
         return new Perfil(UUID.randomUUID(), keycloakSub, TipoPerfil.IDOSO, nome, null, agora, agora);
     }
 
+    /** Cópia do perfil com o nome novo; só o nome e o {@code atualizadoEm} mudam. */
+    public Perfil comNome(String novoNome, Instant agora) {
+        return new Perfil(id, keycloakSub, tipo, novoNome, email, criadoEm, agora);
+    }
+
     public UUID id() {
         return id;
     }
