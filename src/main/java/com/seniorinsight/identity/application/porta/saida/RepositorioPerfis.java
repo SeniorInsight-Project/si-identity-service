@@ -21,6 +21,9 @@ public interface RepositorioPerfis {
      */
     boolean inserirSeAusente(Perfil perfil);
 
+    /** Grava o nome e o {@code atualizadoEm} do perfil. */
+    void atualizarNome(Perfil perfil);
+
     /** Até {@code limite} perfis do tipo com id maior que {@code depoisDe}, em ordem de id (paginação por chave). */
     List<Perfil> listarPorTipoApos(TipoPerfil tipo, UUID depoisDe, int limite);
 }

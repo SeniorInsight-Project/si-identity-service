@@ -1,6 +1,7 @@
 package com.seniorinsight.identity.adapters.out.keycloak;
 
 import java.net.URI;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -62,6 +63,34 @@ class ProvedorIdentidadeKeycloak implements ProvedorIdentidade {
             return id;
         } catch (RestClientException e) {
             throw new IdentidadeIndisponivel("Falha ao criar o usuário do idoso no Keycloak", e);
+        }
+    }
+
+    @Override
+    public void atualizarNome(String keycloakSub, String nome) {
+        try {
+            String token = tokenDoServico().accessToken();
+            // Lê o usuário inteiro e devolve com o nome trocado: o PUT da Admin API com o corpo parcial apagaria
+            // os atributos que não vierem nele. O realm exige firstName e lastName (sem eles o login falha) e o claim
+            // name é os dois juntos: a primeira palavra é o firstName e o resto o lastName.
+            String[] partes = nome.strip().split("\s+", 2);
+            Map<String, Object> usuario = new HashMap<>(rest.get()
+                    .uri("/admin/realms/{realm}/users/{id}", propriedades.realm(), keycloakSub)
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                    .retrieve()
+                    .body(new ParameterizedTypeReference<Map<String, Object>>() {
+                    }));
+            usuario.put("firstName", partes[0]);
+            usuario.put("lastName", partes.length > 1 ? partes[1] : "");
+            rest.put()
+                    .uri("/admin/realms/{realm}/users/{id}", propriedades.realm(), keycloakSub)
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(usuario)
+                    .retrieve()
+                    .toBodilessEntity();
+        } catch (RestClientException e) {
+            throw new IdentidadeIndisponivel("Falha ao atualizar o nome do usuário " + keycloakSub + " no Keycloak", e);
         }
     }
 

@@ -34,6 +34,12 @@ class RepositorioPerfisJpa implements RepositorioPerfis {
     }
 
     @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void atualizarNome(Perfil perfil) {
+        jpa.atualizarNome(perfil.id(), perfil.nome(), perfil.atualizadoEm());
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public List<Perfil> listarPorTipoApos(TipoPerfil tipo, UUID depoisDe, int limite) {
         return jpa.findByTipoAndIdGreaterThanOrderByIdAsc(tipo, depoisDe, Pageable.ofSize(limite)).stream()

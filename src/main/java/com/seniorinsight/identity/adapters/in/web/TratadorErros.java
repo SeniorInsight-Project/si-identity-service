@@ -8,6 +8,7 @@ import com.seniorinsight.identity.application.pareamento.CodigoNaoEncontrado;
 import com.seniorinsight.identity.application.pareamento.FamiliarSemVinculo;
 import com.seniorinsight.identity.application.pareamento.IdentidadeIndisponivel;
 import com.seniorinsight.identity.application.pareamento.RedeIndisponivel;
+import com.seniorinsight.identity.application.perfil.NomeInvalido;
 import com.seniorinsight.identity.application.perfil.PerfilNaoEncontrado;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
@@ -58,6 +59,11 @@ class TratadorErros {
                 .sorted()
                 .collect(Collectors.joining("; "));
         return erro(HttpStatus.BAD_REQUEST, mensagem, requisicao);
+    }
+
+    @ExceptionHandler(NomeInvalido.class)
+    ResponseEntity<Erro> nomeInvalido(NomeInvalido e, HttpServletRequest requisicao) {
+        return erro(HttpStatus.BAD_REQUEST, e.getMessage(), requisicao);
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)

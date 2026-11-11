@@ -18,6 +18,10 @@ interface PerfilJpaRepository extends JpaRepository<PerfilEntidade, UUID> {
 
     List<PerfilEntidade> findByTipoAndIdGreaterThanOrderByIdAsc(TipoPerfil tipo, UUID id, Pageable pagina);
 
+    @Modifying
+    @Query("UPDATE PerfilEntidade p SET p.nome = :nome, p.atualizadoEm = :atualizadoEm WHERE p.id = :id")
+    int atualizarNome(@Param("id") UUID id, @Param("nome") String nome, @Param("atualizadoEm") Instant atualizadoEm);
+
     /**
      * {@code ON CONFLICT DO NOTHING} no unique de {@code keycloak_sub}: se outra transação inseriu o mesmo sub, o
      * PostgreSQL espera ela terminar e não insere nada, sem erro e sem abortar a transação atual.
