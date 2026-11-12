@@ -30,7 +30,7 @@ class RepositorioPerfisJpa implements RepositorioPerfis {
     @Transactional(propagation = Propagation.MANDATORY)
     public boolean inserirSeAusente(Perfil perfil) {
         return jpa.inserirSeAusente(perfil.id(), perfil.keycloakSub(), perfil.tipo().name(), perfil.nome(),
-                perfil.email(), perfil.criadoEm(), perfil.atualizadoEm()) == 1;
+                perfil.email(), perfil.idosoId(), perfil.criadoEm(), perfil.atualizadoEm()) == 1;
     }
 
     @Override

@@ -77,6 +77,69 @@ class ResgatarCodigoPareamentoTest {
     }
 
     @Test
+    void resgateSemIdosoIdCriaOPerfilSemIdosoId() {
+        when(codigos.consumir(anyString(), any(), any())).thenReturn(new Consumo.Resgatado(codigo));
+        when(provedor.obterOuCriarUsuarioIdoso(any(), any())).thenReturn("sub-idoso");
+        when(perfis.buscarPorKeycloakSub("sub-idoso")).thenReturn(Optional.empty());
+        when(perfis.inserirSeAusente(any())).thenReturn(true);
+        when(provedor.emitirTokens("sub-idoso")).thenReturn(TOKENS);
+
+        Perfil perfil = casoDeUso.executar(comando).perfil();
+
+        assertThat(perfil.idosoId()).isNull();
+        verify(publicador).publicar(UserCreated.de(perfil));
+    }
+
+    @Test
+    void resgateComIdosoIdCriaOPerfilComOIdosoIdEPublicaUserCreatedComEle() {
+        UUID idosoId = UUID.randomUUID();
+        CodigoPareamento comIdoso = new CodigoPareamento("K7P2QX", "sub-ana", "Maria", idosoId, codigo.expiraEm());
+        when(codigos.consumir(anyString(), any(), any())).thenReturn(new Consumo.Resgatado(comIdoso));
+        when(provedor.obterOuCriarUsuarioIdoso(any(), any())).thenReturn("sub-idoso");
+        when(perfis.buscarPorKeycloakSub("sub-idoso")).thenReturn(Optional.empty());
+        when(perfis.inserirSeAusente(any())).thenReturn(true);
+        when(provedor.emitirTokens("sub-idoso")).thenReturn(TOKENS);
+
+        Perfil perfil = casoDeUso.executar(comando).perfil();
+
+        assertThat(perfil.idosoId()).isEqualTo(idosoId);
+        verify(publicador).publicar(argThat(evento ->
+                evento instanceof UserCreated criado && idosoId.equals(criado.idosoId())));
+    }
+
+    @Test
+    void novoPareamentoDoMesmoIdosoReaproveitaOPerfilEMantemOIdosoId() {
+        UUID idosoId = UUID.randomUUID();
+        Perfil existente = Perfil.novoIdoso("sub-idoso", "Maria", idosoId, Instant.now());
+        CodigoPareamento comIdoso = new CodigoPareamento("K7P2QX", "sub-ana", "Maria", idosoId, codigo.expiraEm());
+        when(codigos.consumir(anyString(), any(), any())).thenReturn(new Consumo.Resgatado(comIdoso));
+        when(provedor.obterOuCriarUsuarioIdoso(any(), any())).thenReturn("sub-idoso");
+        when(perfis.buscarPorKeycloakSub("sub-idoso")).thenReturn(Optional.of(existente));
+        when(provedor.emitirTokens("sub-idoso")).thenReturn(TOKENS);
+
+        Perfil perfil = casoDeUso.executar(comando).perfil();
+
+        assertThat(perfil).isSameAs(existente);
+        assertThat(perfil.idosoId()).isEqualTo(idosoId);
+        verify(perfis, never()).inserirSeAusente(any());
+        verifyNoInteractions(publicador);
+    }
+
+    @Test
+    void perfilExistenteSemIdosoIdNaoRecebeOIdosoIdDoCodigoEmSilencio() {
+        Perfil existente = Perfil.novoIdoso("sub-idoso", "Maria", null, Instant.now());
+        CodigoPareamento comIdoso = new CodigoPareamento("K7P2QX", "sub-ana", "Maria", UUID.randomUUID(),
+                codigo.expiraEm());
+        when(codigos.consumir(anyString(), any(), any())).thenReturn(new Consumo.Resgatado(comIdoso));
+        when(provedor.obterOuCriarUsuarioIdoso(any(), any())).thenReturn("sub-idoso");
+        when(perfis.buscarPorKeycloakSub("sub-idoso")).thenReturn(Optional.of(existente));
+        when(provedor.emitirTokens("sub-idoso")).thenReturn(TOKENS);
+
+        assertThat(casoDeUso.executar(comando).perfil().idosoId()).isNull();
+        verify(perfis, never()).inserirSeAusente(any());
+    }
+
+    @Test
     void codigoComIdosoIdDevolveOIdosoIdNoResultado() {
         UUID idosoId = UUID.randomUUID();
         CodigoPareamento comIdoso = new CodigoPareamento("K7P2QX", "sub-ana", "Maria", idosoId, codigo.expiraEm());
@@ -91,7 +154,7 @@ class ResgatarCodigoPareamentoTest {
 
     @Test
     void perfilExistenteNaoPublicaOutroEvento() {
-        Perfil existente = Perfil.novoIdoso("sub-idoso", "Maria", Instant.now());
+        Perfil existente = Perfil.novoIdoso("sub-idoso", "Maria", null, Instant.now());
         when(codigos.consumir(anyString(), any(), any())).thenReturn(new Consumo.Resgatado(codigo));
         when(provedor.obterOuCriarUsuarioIdoso(any(), any())).thenReturn("sub-idoso");
         when(perfis.buscarPorKeycloakSub("sub-idoso")).thenReturn(Optional.of(existente));

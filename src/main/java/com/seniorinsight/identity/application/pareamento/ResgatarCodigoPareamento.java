@@ -76,7 +76,7 @@ public class ResgatarCodigoPareamento {
     }
 
     private Resultado registrar(String sub, CodigoPareamento codigo, Comando comando, Instant agora) {
-        Perfil perfil = perfis.buscarPorKeycloakSub(sub).orElseGet(() -> criarPerfil(sub, codigo.nomeIdoso(), agora));
+        Perfil perfil = perfis.buscarPorKeycloakSub(sub).orElseGet(() -> criarPerfil(sub, codigo, agora));
         SessaoAparelho sessao = SessaoAparelho.nova(perfil.id(), comando.identificadorAparelho(),
                 comando.plataforma(), codigo.familiarSub(), agora);
         sessoes.registrar(sessao);
@@ -85,8 +85,8 @@ public class ResgatarCodigoPareamento {
         return new Resultado(perfil, sessao.id(), codigo.idosoId(), tokens);
     }
 
-    private Perfil criarPerfil(String sub, String nome, Instant agora) {
-        Perfil novo = Perfil.novoIdoso(sub, nome, agora);
+    private Perfil criarPerfil(String sub, CodigoPareamento codigo, Instant agora) {
+        Perfil novo = Perfil.novoIdoso(sub, codigo.nomeIdoso(), codigo.idosoId(), agora);
         if (perfis.inserirSeAusente(novo)) {
             publicador.publicar(UserCreated.de(novo));
             return novo;

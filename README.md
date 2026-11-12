@@ -85,7 +85,7 @@ Rotas e schemas do contrato `openapi/identity-v1.yaml`. Os erros usam o corpo pa
 
 **`POST /v1/pareamentos/resgates`** (pública): corpo `{"codigo", "identificadorAparelho", "plataforma": "ANDROID"|"IOS"}`, resposta `200` com `{"perfil", "sessaoAparelhoId", "tokens"}`.
 
-- Cria (ou reaproveita, quando o código tem `idosoId`) o usuário do idoso no Keycloak e o perfil `IDOSO` com `email = null`. Quando o perfil é criado, `user.created` vai para a outbox na mesma transação.
+- Cria (ou reaproveita, quando o código tem `idosoId`) o usuário do idoso no Keycloak e o perfil `IDOSO` com `email = null` e, quando o código tem `idosoId`, com esse id guardado em `perfil.idoso_id`. Se o perfil já existia sem `idosoId`, o id do código não o preenche. Quando o perfil é criado, `user.created` vai para a outbox na mesma transação.
 - Registra a sessão em `sessao_aparelho` (quem pareou fica em `pareado_por`). Parear de novo o mesmo aparelho do mesmo idoso revoga a sessão anterior (`revogado_em`).
 - `tokens` vem do token exchange V1 do Keycloak (ADR 0001). O refresh token é do client `si-identity-service`, então o app ainda não renova sozinho: ver as consequências na ADR.
 - `404` código inexistente (ou substituído), `409` já resgatado, `410` expirado, `400` corpo fora do contrato, `503` Keycloak fora.
@@ -162,7 +162,7 @@ A entrega é "pelo menos uma vez": consumidores devem ser idempotentes, deduplic
 
 | Routing key | Quando | `data` | Contrato |
 |---|---|---|---|
-| `user.created` | primeiro `GET /v1/me` de um familiar ou primeiro resgate de código do idoso (perfil criado) | `perfilId`, `keycloakSub`, `tipo`, `nome`, `email` (ou `null`), `criadoEm` | [`events/user.created.v1.json`](https://github.com/SeniorInsight-Project/si-contracts/blob/develop/events/user.created.v1.json) |
+| `user.created` | primeiro `GET /v1/me` de um familiar ou primeiro resgate de código do idoso (perfil criado) | `perfilId`, `keycloakSub`, `tipo`, `nome`, `email` (ou `null`), `criadoEm`, `idosoId` (ou `null`) | [`events/user.created.v1.json`](https://github.com/SeniorInsight-Project/si-contracts/blob/develop/events/user.created.v1.json) |
 
 O consumidor do `user.created` é o si-care-service (fila `care.q`, criada por ele). O teste `ContratoUserCreatedTest` valida o payload contra uma cópia do schema em `src/test/resources/contracts/`; ao mudar o contrato no si-contracts, atualize a cópia.
 
