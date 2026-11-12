@@ -58,7 +58,7 @@ class ObterOuCriarPerfilTest {
         ArgumentCaptor<UserCreated> evento = ArgumentCaptor.forClass(UserCreated.class);
         verify(publicador).publicar(evento.capture());
         assertThat(evento.getValue()).isEqualTo(new UserCreated(perfil.id(), SUB, TipoPerfil.FAMILIAR, "Ana Souza",
-                "ana@example.com", perfil.criadoEm()));
+                "ana@example.com", perfil.criadoEm(), null));
         assertThat(evento.getValue().tipoAgregado()).isEqualTo("perfil");
         assertThat(evento.getValue().agregadoId()).isEqualTo(perfil.id());
         assertThat(evento.getValue().tipoEvento()).isEqualTo("user.created");
@@ -107,7 +107,7 @@ class ObterOuCriarPerfilTest {
 
     private static Perfil perfil(String sub) {
         Instant criadoEm = Instant.parse("2026-10-31T12:00:00Z");
-        return new Perfil(UUID.randomUUID(), sub, TipoPerfil.FAMILIAR, "Ana Souza", "ana@example.com", criadoEm,
-                criadoEm);
+        return new Perfil(UUID.randomUUID(), sub, TipoPerfil.FAMILIAR, "Ana Souza", "ana@example.com", null,
+                criadoEm, criadoEm);
     }
 }

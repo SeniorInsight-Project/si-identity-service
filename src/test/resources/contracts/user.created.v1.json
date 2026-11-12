@@ -49,7 +49,12 @@
           "maxLength": 320,
           "description": "Nulo para o idoso pareado por código/QR."
         },
-        "criadoEm": { "type": "string", "format": "date-time" }
+        "criadoEm": { "type": "string", "format": "date-time" },
+        "idosoId": {
+          "type": ["string", "null"],
+          "format": "uuid",
+          "description": "Id do idoso no care-service. Só para `tipo` IDOSO, quando o código de pareamento foi gerado com `idosoId`; null nos demais casos."
+        }
       }
     }
   }

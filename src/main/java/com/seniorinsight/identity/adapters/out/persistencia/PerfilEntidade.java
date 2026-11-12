@@ -28,6 +28,8 @@ class PerfilEntidade {
 
     private String email;
 
+    private UUID idosoId;
+
     private Instant criadoEm;
 
     private Instant atualizadoEm;
@@ -36,6 +38,6 @@ class PerfilEntidade {
     }
 
     Perfil paraDominio() {
-        return new Perfil(id, keycloakSub, tipo, nome, email, criadoEm, atualizadoEm);
+        return new Perfil(id, keycloakSub, tipo, nome, email, idosoId, criadoEm, atualizadoEm);
     }
 }

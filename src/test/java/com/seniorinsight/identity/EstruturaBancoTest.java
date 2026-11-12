@@ -19,7 +19,7 @@ class EstruturaBancoTest {
 
     @Test
     void flywayAplicaAsMigracoesNoSchemaIdentity() {
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("2");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("3");
         assertThat(jdbc.queryForList(
                 "SELECT table_name FROM information_schema.tables WHERE table_schema = 'identity'", String.class))
                 .contains("perfil", "sessao_aparelho", "outbox_evento", "flyway_schema_history");
@@ -43,5 +43,21 @@ class EstruturaBancoTest {
         assertThat(definicao).startsWith("CREATE UNIQUE INDEX")
                 .contains("(perfil_id, identificador_aparelho)")
                 .contains("WHERE (revogado_em IS NULL)");
+    }
+
+    @Test
+    void perfilTemIdosoIdOpcionalComIndiceUnicoParcial() {
+        assertThat(jdbc.queryForObject("""
+                SELECT is_nullable FROM information_schema.columns
+                 WHERE table_schema = 'identity' AND table_name = 'perfil' AND column_name = 'idoso_id'""",
+                String.class)).isEqualTo("YES");
+
+        String definicao = jdbc.queryForObject(
+                "SELECT indexdef FROM pg_indexes WHERE schemaname = 'identity' AND indexname = ?",
+                String.class, "uk_perfil_idoso_id");
+
+        assertThat(definicao).startsWith("CREATE UNIQUE INDEX")
+                .contains("(idoso_id)")
+                .contains("WHERE (idoso_id IS NOT NULL)");
     }
 }

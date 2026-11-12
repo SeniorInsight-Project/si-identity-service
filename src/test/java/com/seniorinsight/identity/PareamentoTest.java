@@ -217,6 +217,8 @@ class PareamentoTest {
 
         String perfilId = primeiro.at("/perfil/id").asText();
         assertThat(segundo.at("/perfil/id").asText()).isEqualTo(perfilId);
+        assertThat(jdbc.queryForObject("SELECT idoso_id FROM perfil WHERE id = ?", UUID.class,
+                UUID.fromString(perfilId))).isEqualTo(idosoId);
         assertThat(jdbc.queryForObject(
                 "SELECT count(*) FROM outbox_evento WHERE tipo_evento = 'user.created' AND agregado_id = ?",
                 Integer.class, UUID.fromString(perfilId))).isEqualTo(1);
