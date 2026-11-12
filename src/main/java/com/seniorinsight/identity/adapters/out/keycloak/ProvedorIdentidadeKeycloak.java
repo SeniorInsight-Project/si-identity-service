@@ -95,6 +95,41 @@ class ProvedorIdentidadeKeycloak implements ProvedorIdentidade {
     }
 
     @Override
+    public void excluirUsuario(String keycloakSub) {
+        try {
+            String token = tokenDoServico().accessToken();
+            ignorandoInexistente(() -> encerrarSessoes(token, keycloakSub));
+            ignorandoInexistente(() -> apagar(token, keycloakSub));
+        } catch (RestClientException e) {
+            throw new IdentidadeIndisponivel("Falha ao excluir o usuário " + keycloakSub + " no Keycloak", e);
+        }
+    }
+
+    private void encerrarSessoes(String token, String keycloakSub) {
+        rest.post()
+                .uri("/admin/realms/{realm}/users/{id}/logout", propriedades.realm(), keycloakSub)
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                .retrieve()
+                .toBodilessEntity();
+    }
+
+    private void apagar(String token, String keycloakSub) {
+        rest.delete()
+                .uri("/admin/realms/{realm}/users/{id}", propriedades.realm(), keycloakSub)
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                .retrieve()
+                .toBodilessEntity();
+    }
+
+    private static void ignorandoInexistente(Runnable chamada) {
+        try {
+            chamada.run();
+        } catch (HttpClientErrorException.NotFound usuarioInexistente) {
+            // Já apagado (por uma tentativa anterior, por exemplo): o resultado é o que se queria.
+        }
+    }
+
+    @Override
     public Tokens emitirTokens(String keycloakSub) {
         try {
             MultiValueMap<String, String> formulario = credenciais();
