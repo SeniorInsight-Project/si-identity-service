@@ -19,10 +19,11 @@ class EstruturaBancoTest {
 
     @Test
     void flywayAplicaAsMigracoesNoSchemaIdentity() {
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("3");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("4");
         assertThat(jdbc.queryForList(
                 "SELECT table_name FROM information_schema.tables WHERE table_schema = 'identity'", String.class))
-                .contains("perfil", "sessao_aparelho", "outbox_evento", "flyway_schema_history");
+                .contains("perfil", "sessao_aparelho", "outbox_evento", "exclusao_pedido", "titular_excluido",
+                        "flyway_schema_history");
     }
 
     @Test

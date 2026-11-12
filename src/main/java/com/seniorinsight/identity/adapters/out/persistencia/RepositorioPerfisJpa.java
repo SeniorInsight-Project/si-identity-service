@@ -40,6 +40,12 @@ class RepositorioPerfisJpa implements RepositorioPerfis {
     }
 
     @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void excluir(UUID perfilId) {
+        jpa.excluir(perfilId);
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public List<Perfil> listarPorTipoApos(TipoPerfil tipo, UUID depoisDe, int limite) {
         return jpa.findByTipoAndIdGreaterThanOrderByIdAsc(tipo, depoisDe, Pageable.ofSize(limite)).stream()
