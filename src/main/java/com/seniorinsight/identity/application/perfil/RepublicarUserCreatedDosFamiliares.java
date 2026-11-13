@@ -5,6 +5,7 @@ import java.util.UUID;
 
 import com.seniorinsight.identity.application.porta.saida.PublicadorEventos;
 import com.seniorinsight.identity.application.porta.saida.RepositorioPerfis;
+import com.seniorinsight.identity.application.porta.saida.RepositorioTitularesExcluidos;
 import com.seniorinsight.identity.domain.evento.UserCreated;
 import com.seniorinsight.identity.domain.perfil.Perfil;
 import com.seniorinsight.identity.domain.perfil.TipoPerfil;
@@ -28,12 +29,15 @@ public class RepublicarUserCreatedDosFamiliares {
 
     private final RepositorioPerfis repositorio;
     private final PublicadorEventos publicador;
+    private final RepositorioTitularesExcluidos excluidos;
     private final TransactionTemplate transacao;
 
     public RepublicarUserCreatedDosFamiliares(RepositorioPerfis repositorio, PublicadorEventos publicador,
+                                              RepositorioTitularesExcluidos excluidos,
                                               TransactionTemplate transacao) {
         this.repositorio = repositorio;
         this.publicador = publicador;
+        this.excluidos = excluidos;
         this.transacao = transacao;
     }
 
@@ -46,18 +50,27 @@ public class RepublicarUserCreatedDosFamiliares {
         UUID ultimo = PRIMEIRO_ID;
         while (true) {
             UUID depoisDe = ultimo;
-            List<Perfil> lote = transacao.execute(status -> {
-                List<Perfil> perfis = repositorio.listarPorTipoApos(TipoPerfil.FAMILIAR, depoisDe, tamanhoLote);
-                perfis.forEach(perfil -> publicador.publicar(UserCreated.de(perfil)));
-                return perfis;
-            });
-            if (lote == null || lote.isEmpty()) {
+            Lote lote = transacao.execute(status -> publicarLote(depoisDe, tamanhoLote));
+            if (lote == null || lote.perfis().isEmpty()) {
                 break;
             }
-            total += lote.size();
-            ultimo = lote.getLast().id();
+            total += lote.publicados();
+            ultimo = lote.perfis().getLast().id();
         }
         log.info("Republicação: {} eventos user.created de familiares gravados na outbox", total);
         return total;
+    }
+
+    /** Publica os perfis do lote que não são de titular excluído (HU-022): desses não sai mais nada. */
+    private Lote publicarLote(UUID depoisDe, int tamanhoLote) {
+        List<Perfil> perfis = repositorio.listarPorTipoApos(TipoPerfil.FAMILIAR, depoisDe, tamanhoLote);
+        List<Perfil> aPublicar = perfis.stream()
+                .filter(perfil -> !excluidos.bloquearEVerificarExclusao(perfil.keycloakSub()))
+                .toList();
+        aPublicar.forEach(perfil -> publicador.publicar(UserCreated.de(perfil)));
+        return new Lote(perfis, aPublicar.size());
+    }
+
+    private record Lote(List<Perfil> perfis, int publicados) {
     }
 }

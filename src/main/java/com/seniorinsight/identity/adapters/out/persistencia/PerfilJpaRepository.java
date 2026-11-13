@@ -19,6 +19,16 @@ interface PerfilJpaRepository extends JpaRepository<PerfilEntidade, UUID> {
     List<PerfilEntidade> findByTipoAndIdGreaterThanOrderByIdAsc(TipoPerfil tipo, UUID id, Pageable pagina);
 
     @Modifying
+    @Query("UPDATE PerfilEntidade p SET p.idosoId = :idosoId, p.atualizadoEm = :atualizadoEm "
+            + "WHERE p.id = :id AND p.idosoId IS NULL")
+    int preencherIdosoId(@Param("id") UUID id, @Param("idosoId") UUID idosoId,
+                         @Param("atualizadoEm") Instant atualizadoEm);
+
+    @Modifying
+    @Query("DELETE FROM PerfilEntidade p WHERE p.id = :id")
+    int excluir(@Param("id") UUID id);
+
+    @Modifying
     @Query("UPDATE PerfilEntidade p SET p.nome = :nome, p.atualizadoEm = :atualizadoEm WHERE p.id = :id")
     int atualizarNome(@Param("id") UUID id, @Param("nome") String nome, @Param("atualizadoEm") Instant atualizadoEm);
 

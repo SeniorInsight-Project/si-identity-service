@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.time.Instant;
@@ -15,6 +16,7 @@ import java.util.UUID;
 
 import com.seniorinsight.identity.application.porta.saida.PublicadorEventos;
 import com.seniorinsight.identity.application.porta.saida.RepositorioPerfis;
+import com.seniorinsight.identity.application.porta.saida.RepositorioTitularesExcluidos;
 import com.seniorinsight.identity.domain.evento.UserCreated;
 import com.seniorinsight.identity.domain.perfil.Perfil;
 import com.seniorinsight.identity.domain.perfil.TipoPerfil;
@@ -27,7 +29,8 @@ class ObterOuCriarPerfilTest {
 
     private final RepositorioPerfis repositorio = mock(RepositorioPerfis.class);
     private final PublicadorEventos publicador = mock(PublicadorEventos.class);
-    private final ObterOuCriarPerfil casoDeUso = new ObterOuCriarPerfil(repositorio, publicador);
+    private final RepositorioTitularesExcluidos excluidos = mock(RepositorioTitularesExcluidos.class);
+    private final ObterOuCriarPerfil casoDeUso = new ObterOuCriarPerfil(repositorio, publicador, excluidos);
 
     @Test
     void perfilExistenteEhDevolvidoSemPublicarEvento() {
@@ -99,6 +102,28 @@ class ObterOuCriarPerfilTest {
 
         assertThat(perfil).isSameAs(daOutraRequisicao);
         verify(publicador, never()).publicar(any());
+    }
+
+    @Test
+    void titularExcluidoNaoTemOPerfilRecriadoPorUmTokenAindaValido() {
+        when(repositorio.buscarPorKeycloakSub(SUB)).thenReturn(Optional.empty());
+        when(excluidos.bloquearEVerificarExclusao(SUB)).thenReturn(true);
+
+        assertThatThrownBy(() -> casoDeUso.executar(familiar("Ana Souza", "ana", "ana@example.com")))
+                .isInstanceOf(TitularExcluido.class)
+                .isInstanceOf(PerfilNaoEncontrado.class);
+
+        verify(repositorio, never()).inserirSeAusente(any());
+        verify(publicador, never()).publicar(any());
+    }
+
+    @Test
+    void perfilExistenteNaoConsultaOsTitularesExcluidos() {
+        when(repositorio.buscarPorKeycloakSub(SUB)).thenReturn(Optional.of(perfil(SUB)));
+
+        casoDeUso.executar(familiar("Ana Souza", "ana", "ana@example.com"));
+
+        verifyNoInteractions(excluidos);
     }
 
     private static ObterOuCriarPerfil.Comando familiar(String nome, String nomeUsuario, String email) {

@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/SeniorInsight-Project/si-contracts/main/events/lgpd.erasure.completed.v1.json",
+  "title": "lgpd.erasure.completed v1",
+  "description": "Confirma que o serviço concluiu sua parte da exclusão. O subject é o protocolo e o evento não carrega identificadores do titular.",
+  "type": "object",
+  "required": [
+    "specversion",
+    "id",
+    "source",
+    "type",
+    "time",
+    "datacontenttype",
+    "dataschema",
+    "subject",
+    "data"
+  ],
+  "properties": {
+    "specversion": {
+      "const": "1.0"
+    },
+    "id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "source": {
+      "enum": [
+        "/identity-service",
+        "/care-service",
+        "/billing-service",
+        "/insight-service",
+        "/notification-service",
+        "/telemetry-service"
+      ]
+    },
+    "type": {
+      "const": "lgpd.erasure.completed"
+    },
+    "time": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "datacontenttype": {
+      "const": "application/json"
+    },
+    "dataschema": {
+      "const": "https://raw.githubusercontent.com/SeniorInsight-Project/si-contracts/main/events/lgpd.erasure.completed.v1.json"
+    },
+    "subject": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "data": {
+      "type": "object",
+      "required": [
+        "protocolo",
+        "servico"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "protocolo": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "servico": {
+          "enum": [
+            "identity-service",
+            "care-service",
+            "billing-service",
+            "insight-service",
+            "notification-service",
+            "telemetry-service"
+          ]
+        }
+      }
+    }
+  },
+  "propertyNames": {
+    "pattern": "^[a-z0-9]{1,20}$"
+  }
+}

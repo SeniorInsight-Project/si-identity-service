@@ -29,7 +29,14 @@ import com.seniorinsight.identity.domain.pareamento.CodigoPareamento;
 import com.seniorinsight.identity.domain.pareamento.Plataforma;
 import com.seniorinsight.identity.domain.perfil.Perfil;
 import com.seniorinsight.identity.domain.perfil.TipoPerfil;
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 import org.springframework.transaction.support.TransactionOperations;
 
 class ResgatarCodigoPareamentoTest {
@@ -45,6 +52,20 @@ class ResgatarCodigoPareamentoTest {
     private final ResgatarCodigoPareamento casoDeUso = new ResgatarCodigoPareamento(codigos, provedor, perfis,
             sessoes, publicador, TransactionOperations.withoutTransaction(),
             new PropriedadesPareamento(Duration.ofHours(24), RETENCAO));
+
+    private final ListAppender<ILoggingEvent> log = new ListAppender<>();
+    private final Logger logDoCasoDeUso = (Logger) LoggerFactory.getLogger(ResgatarCodigoPareamento.class);
+
+    @BeforeEach
+    void capturarLog() {
+        log.start();
+        logDoCasoDeUso.addAppender(log);
+    }
+
+    @AfterEach
+    void soltarLog() {
+        logDoCasoDeUso.detachAppender(log);
+    }
 
     private final CodigoPareamento codigo = new CodigoPareamento("K7P2QX", "sub-ana", "Maria", null,
             Instant.now().plus(Duration.ofHours(1)));
@@ -126,17 +147,85 @@ class ResgatarCodigoPareamentoTest {
     }
 
     @Test
-    void perfilExistenteSemIdosoIdNaoRecebeOIdosoIdDoCodigoEmSilencio() {
+    void perfilExistenteSemIdosoIdGanhaOIdosoIdDoCodigoEPublicaUserCreatedDoPerfil() {
+        UUID idosoId = UUID.randomUUID();
+        Perfil existente = Perfil.novoIdoso("sub-idoso", "Maria", null, Instant.now().minusSeconds(3600));
+        pareamentoDeIdosoExistente(existente, idosoId);
+        when(perfis.preencherIdosoId(any())).thenReturn(true);
+
+        Perfil perfil = casoDeUso.executar(comando).perfil();
+
+        assertThat(perfil.idosoId()).isEqualTo(idosoId);
+        assertThat(perfil.id()).isEqualTo(existente.id());
+        assertThat(perfil.atualizadoEm()).isAfter(existente.atualizadoEm());
+        verify(perfis).preencherIdosoId(perfil);
+        verify(publicador).publicar(UserCreated.de(perfil));
+        verify(perfis, never()).inserirSeAusente(any());
+    }
+
+    @Test
+    void perfilExistenteComOutroIdosoIdNaoEhSobrescritoEFicaNoLog() {
+        UUID gravado = UUID.randomUUID();
+        UUID doCodigo = UUID.randomUUID();
+        Perfil existente = Perfil.novoIdoso("sub-idoso", "Maria", gravado, Instant.now());
+        pareamentoDeIdosoExistente(existente, doCodigo);
+
+        Perfil perfil = casoDeUso.executar(comando).perfil();
+
+        assertThat(perfil).isSameAs(existente);
+        verify(perfis, never()).preencherIdosoId(any());
+        verifyNoInteractions(publicador);
+        assertThat(log.list).extracting(ILoggingEvent::getFormattedMessage)
+                .anySatisfy(mensagem -> assertThat(mensagem).contains(gravado.toString(), doCodigo.toString()));
+        assertThat(log.list).extracting(ILoggingEvent::getLevel).contains(Level.WARN);
+    }
+
+    @Test
+    void perfilExistenteComOMesmoIdosoIdDoCodigoNaoMudaNada() {
+        UUID idosoId = UUID.randomUUID();
+        Perfil existente = Perfil.novoIdoso("sub-idoso", "Maria", idosoId, Instant.now());
+        pareamentoDeIdosoExistente(existente, idosoId);
+
+        assertThat(casoDeUso.executar(comando).perfil()).isSameAs(existente);
+
+        verify(perfis, never()).preencherIdosoId(any());
+        verifyNoInteractions(publicador);
+        assertThat(log.list).isEmpty();
+    }
+
+    @Test
+    void quemPerdeACorridaNoPreenchimentoNaoPublicaUserCreated() {
+        UUID idosoId = UUID.randomUUID();
+        Perfil existente = Perfil.novoIdoso("sub-idoso", "Maria", null, Instant.now().minusSeconds(3600));
+        pareamentoDeIdosoExistente(existente, idosoId);
+        when(perfis.preencherIdosoId(any())).thenReturn(false);
+
+        casoDeUso.executar(comando);
+
+        verifyNoInteractions(publicador);
+    }
+
+    @Test
+    void codigoSemIdosoIdNaoPreencheOIdosoIdDoPerfilExistente() {
         Perfil existente = Perfil.novoIdoso("sub-idoso", "Maria", null, Instant.now());
-        CodigoPareamento comIdoso = new CodigoPareamento("K7P2QX", "sub-ana", "Maria", UUID.randomUUID(),
+        when(codigos.consumir(anyString(), any(), any())).thenReturn(new Consumo.Resgatado(codigo));
+        when(provedor.obterOuCriarUsuarioIdoso(any(), any())).thenReturn("sub-idoso");
+        when(perfis.buscarPorKeycloakSub("sub-idoso")).thenReturn(Optional.of(existente));
+        when(provedor.emitirTokens("sub-idoso")).thenReturn(TOKENS);
+
+        assertThat(casoDeUso.executar(comando).perfil()).isSameAs(existente);
+
+        verify(perfis, never()).preencherIdosoId(any());
+        verifyNoInteractions(publicador);
+    }
+
+    private void pareamentoDeIdosoExistente(Perfil existente, UUID idosoDoCodigo) {
+        CodigoPareamento comIdoso = new CodigoPareamento("K7P2QX", "sub-ana", "Maria", idosoDoCodigo,
                 codigo.expiraEm());
         when(codigos.consumir(anyString(), any(), any())).thenReturn(new Consumo.Resgatado(comIdoso));
         when(provedor.obterOuCriarUsuarioIdoso(any(), any())).thenReturn("sub-idoso");
         when(perfis.buscarPorKeycloakSub("sub-idoso")).thenReturn(Optional.of(existente));
         when(provedor.emitirTokens("sub-idoso")).thenReturn(TOKENS);
-
-        assertThat(casoDeUso.executar(comando).perfil().idosoId()).isNull();
-        verify(perfis, never()).inserirSeAusente(any());
     }
 
     @Test

@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/SeniorInsight-Project/si-contracts/main/events/lgpd.erasure.requested.v1.json",
+  "title": "lgpd.erasure.requested v1",
+  "description": "O report-service solicita a exclusão dos dados do titular indicado, não dos dados de quem solicitou. O subject é o protocolo.",
+  "type": "object",
+  "required": [
+    "specversion",
+    "id",
+    "source",
+    "type",
+    "time",
+    "datacontenttype",
+    "dataschema",
+    "subject",
+    "data"
+  ],
+  "properties": {
+    "specversion": {
+      "const": "1.0"
+    },
+    "id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "source": {
+      "const": "/report-service"
+    },
+    "type": {
+      "const": "lgpd.erasure.requested"
+    },
+    "time": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "datacontenttype": {
+      "const": "application/json"
+    },
+    "dataschema": {
+      "const": "https://raw.githubusercontent.com/SeniorInsight-Project/si-contracts/main/events/lgpd.erasure.requested.v1.json"
+    },
+    "subject": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "data": {
+      "type": "object",
+      "required": [
+        "protocolo",
+        "tipoTitular",
+        "titularId",
+        "titularSub"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "protocolo": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "tipoTitular": {
+          "enum": [
+            "IDOSO",
+            "FAMILIAR"
+          ]
+        },
+        "titularId": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Para IDOSO: o `idosoId` do care-service; se o idoso não tiver cadastro no care, o id do perfil no identity. Para FAMILIAR: o id do perfil no identity. Não é o `sub`."
+        },
+        "titularSub": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255,
+          "description": "`sub` do Keycloak do titular"
+        }
+      }
+    }
+  },
+  "propertyNames": {
+    "pattern": "^[a-z0-9]{1,20}$"
+  }
+}

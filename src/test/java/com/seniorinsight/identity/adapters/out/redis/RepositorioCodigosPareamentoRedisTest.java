@@ -149,6 +149,44 @@ class RepositorioCodigosPareamentoRedisTest {
         assertThat(consumos).filteredOn(Consumo.JaResgatado.class::isInstance).hasSize(7);
     }
 
+    @Test
+    void excluirDoFamiliarApagaTodosOsCodigosVigentesDeleEDeMaisNinguem() {
+        Instant expiraEm = Instant.now().plus(Duration.ofHours(1));
+        CodigoPareamento paraIdoso = codigo(UUID.randomUUID(), expiraEm);
+        CodigoPareamento paraNovoIdoso = codigo(null, expiraEm);
+        CodigoPareamento deOutroFamiliar = new CodigoPareamento(CodigoPareamento.sortear(),
+                "sub-" + UUID.randomUUID(), "Joana", null, expiraEm);
+        repositorio.salvar(paraIdoso, RETENCAO);
+        repositorio.salvar(paraNovoIdoso, RETENCAO);
+        repositorio.salvar(deOutroFamiliar, RETENCAO);
+
+        repositorio.excluirDoFamiliar(familiar);
+
+        assertThat(repositorio.consumir(paraIdoso.codigo(), Instant.now(), RETENCAO))
+                .isInstanceOf(Consumo.Inexistente.class);
+        assertThat(repositorio.consumir(paraNovoIdoso.codigo(), Instant.now(), RETENCAO))
+                .isInstanceOf(Consumo.Inexistente.class);
+        assertThat(redis.keys("identity:pairing:emissor:" + familiar + ":*")).isEmpty();
+        assertThat(repositorio.consumir(deOutroFamiliar.codigo(), Instant.now(), RETENCAO))
+                .isInstanceOf(Consumo.Resgatado.class);
+    }
+
+    @Test
+    void excluirDoFamiliarTrataOSubComoTextoELiteralEnaoComoPadrao() {
+        CodigoPareamento deOutroFamiliar = new CodigoPareamento(CodigoPareamento.sortear(),
+                "sub-" + UUID.randomUUID(), "Joana", null, Instant.now().plus(Duration.ofHours(1)));
+        repositorio.salvar(deOutroFamiliar, RETENCAO);
+
+        repositorio.excluirDoFamiliar("*");
+
+        assertThat(redis.hasKey("identity:pairing:" + deOutroFamiliar.codigo())).isTrue();
+    }
+
+    @Test
+    void excluirDoFamiliarSemCodigosNaoFazNada() {
+        repositorio.excluirDoFamiliar(familiar);
+    }
+
     /** O mesmo familiar em todo o teste (o JUnit cria uma instância por método). */
     private final String familiar = "sub-" + UUID.randomUUID();
 
