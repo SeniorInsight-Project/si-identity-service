@@ -61,6 +61,16 @@
       "realmRoles": ["default-roles-seniorinsight"]
     },
     {
+      "username": "carlos.lima@example.com",
+      "enabled": true,
+      "firstName": "Carlos",
+      "lastName": "Lima",
+      "email": "carlos.lima@example.com",
+      "emailVerified": true,
+      "credentials": [{ "type": "password", "value": "senha-de-teste", "temporary": false }],
+      "realmRoles": ["default-roles-seniorinsight"]
+    },
+    {
       "username": "medico@example.com",
       "enabled": true,
       "firstName": "Sem",

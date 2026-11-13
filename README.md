@@ -85,7 +85,7 @@ Rotas e schemas do contrato `openapi/identity-v1.yaml`. Os erros usam o corpo pa
 
 **`POST /v1/pareamentos/resgates`** (pública): corpo `{"codigo", "identificadorAparelho", "plataforma": "ANDROID"|"IOS"}`, resposta `200` com `{"perfil", "sessaoAparelhoId", "tokens"}`.
 
-- Cria (ou reaproveita, quando o código tem `idosoId`) o usuário do idoso no Keycloak e o perfil `IDOSO` com `email = null` e, quando o código tem `idosoId`, com esse id guardado em `perfil.idoso_id`. Se o perfil já existia sem `idosoId`, o id do código não o preenche. Quando o perfil é criado, `user.created` vai para a outbox na mesma transação.
+- Cria (ou reaproveita, quando o código tem `idosoId`) o usuário do idoso no Keycloak e o perfil `IDOSO` com `email = null` e, quando o código tem `idosoId`, com esse id guardado em `perfil.idoso_id`. Quando o perfil é criado, `user.created` vai para a outbox na mesma transação. Se o perfil já existia sem `idosoId` e o código traz um, o campo é preenchido (só quando está vazio) e um novo `user.created` do perfil vai para a outbox; um `idosoId` diferente do já gravado não é sobrescrito e fica registrado em log.
 - Registra a sessão em `sessao_aparelho` (quem pareou fica em `pareado_por`). Parear de novo o mesmo aparelho do mesmo idoso revoga a sessão anterior (`revogado_em`).
 - `tokens` vem do token exchange V1 do Keycloak (ADR 0001). O refresh token é do client `si-identity-service`, então o app ainda não renova sozinho: ver as consequências na ADR.
 - `404` código inexistente (ou substituído), `409` já resgatado, `410` expirado, `400` corpo fora do contrato, `503` Keycloak fora.
@@ -123,6 +123,10 @@ O `application.yml` não tem segredos; tudo vem do ambiente. O modelo está no [
 | `IDENTITY_PAREAMENTO_RETENCAO` | `PT24H` | Quanto tempo o código vencido ou usado ainda responde 410/409 |
 | `IDENTITY_REPUBLICAR_FAMILIARES` | `false` | Ligue uma vez para regravar na outbox o `user.created` de todos os familiares (backfill do care-service) |
 | `IDENTITY_REPUBLICAR_FAMILIARES_LOTE` | `200` | Tamanho do lote da republicação |
+| `IDENTITY_EXCLUSAO_ROUTING_KEY` | `lgpd.erasure.requested` | Routing key da `si.events` ligada à fila `identity.q` |
+| `IDENTITY_EXCLUSAO_TENTATIVAS` | `5` | Quantas vezes um pedido de exclusão é tentado (a primeira conta) quando o Keycloak ou o banco falham, antes de ir para `identity.dlq` |
+| `IDENTITY_EXCLUSAO_INTERVALO` | `PT30S` | Espera entre as tentativas |
+| `IDENTITY_MENSAGERIA_PREFETCH` | `10` | Prefetch do consumidor de `identity.q` |
 | `SERVER_PORT` | `8080` | Porta HTTP |
 
 `KEYCLOAK_ISSUER_URI` precisa ser **exatamente** o valor do claim `iss` dos tokens e precisa ser acessível de dentro do serviço (é dele que vêm as chaves públicas). Em Docker, configure o hostname do Keycloak (`KC_HOSTNAME`) para que o issuer seja o mesmo dentro e fora da rede dos containers.
@@ -165,6 +169,30 @@ A entrega é "pelo menos uma vez": consumidores devem ser idempotentes, deduplic
 | `user.created` | primeiro `GET /v1/me` de um familiar ou primeiro resgate de código do idoso (perfil criado) | `perfilId`, `keycloakSub`, `tipo`, `nome`, `email` (ou `null`), `criadoEm`, `idosoId` (ou `null`) | [`events/user.created.v1.json`](https://github.com/SeniorInsight-Project/si-contracts/blob/develop/events/user.created.v1.json) |
 
 O consumidor do `user.created` é o si-care-service (fila `care.q`, criada por ele). O teste `ContratoUserCreatedTest` valida o payload contra uma cópia do schema em `src/test/resources/contracts/`; ao mudar o contrato no si-contracts, atualize a cópia.
+
+### Eventos consumidos
+
+| Routing key | Fila | O que faz | Contrato |
+|---|---|---|---|
+| `lgpd.erasure.requested` | `identity.q` | exclui a conta do titular (ver abaixo) | [`events/lgpd.erasure.requested.v1.json`](https://github.com/SeniorInsight-Project/si-contracts/blob/develop/events/lgpd.erasure.requested.v1.json) |
+
+Em resposta o serviço publica `lgpd.erasure.completed` (`data`: `protocolo` e `servico: identity-service`; `subject` = protocolo), conforme [`events/lgpd.erasure.completed.v1.json`](https://github.com/SeniorInsight-Project/si-contracts/blob/develop/events/lgpd.erasure.completed.v1.json). Os testes `PedidoExclusaoJsonTest` e `ContratoExclusaoConcluidaTest` usam cópias dos schemas em `src/test/resources/contracts/`.
+
+## Exclusão da conta (HU-022)
+
+O report-service pede a exclusão com `lgpd.erasure.requested` (`protocolo`, `tipoTitular` IDOSO ou FAMILIAR, `titularId`, `titularSub`). O serviço localiza o titular pelo `titularSub` (`perfil.keycloak_sub`), que vale para os dois tipos.
+
+**Fila.** `identity.q` (durável) ligada à `si.events` pela routing key de `IDENTITY_EXCLUSAO_ROUTING_KEY`, com ack manual e prefetch `IDENTITY_MENSAGERIA_PREFETCH`. Mensagem rejeitada vai para a exchange `identity.dlx` e fica em `identity.dlq`. O envelope é validado (`specversion`, `source` `/report-service`, `type`, `dataschema`, `datacontenttype`, `id` igual ao `message_id`, `time`, `subject` igual ao `protocolo`, `data`); envelope inválido vai direto para `identity.dlq`, com log de erro.
+
+**Etapas**, para nunca chamar o Keycloak dentro de uma transação do banco:
+
+1. Transação curta: grava o pedido em `exclusao_pedido` como `PENDENTE`, com o `sub`. Um protocolo já `CONCLUIDO` termina aqui (reentrega sem efeito).
+2. Fora de transação: `ProvedorIdentidade.excluirUsuario(sub)` encerra as sessões do usuário (`POST .../users/{id}/logout`) e o apaga (`DELETE .../users/{id}`) pela Admin API. Usuário que já não existe (404) conta como sucesso.
+3. Transação curta: marca o pedido como `CONCLUIDO` (e apaga o `sub` da linha), guarda o sha256 do `sub` em `titular_excluido`, apaga as `sessao_aparelho` e o perfil, apaga os códigos de pareamento vigentes dele no Redis (só para FAMILIAR) e grava `lgpd.erasure.completed` na outbox. Sem perfil para o `sub`, o usuário ainda é apagado no Keycloak e a confirmação sai igual. Quem conclui o pedido primeiro é quem publica, então duas entregas simultâneas confirmam uma vez só.
+
+**Falhas.** Keycloak ou banco fora: o consumidor tenta de novo `IDENTITY_EXCLUSAO_TENTATIVAS` vezes, esperando `IDENTITY_EXCLUSAO_INTERVALO` entre elas; o pedido pendente da etapa 1 continua registrado. Estourado o limite, registra um log de **erro** com o protocolo e manda a mensagem para `identity.dlq`. Para reprocessar, devolva a mensagem da `identity.dlq` para a `identity.q` (o pedido retoma de onde parou).
+
+**Sem recriar.** Um access token ainda válido não recria o perfil: `ObterOuCriarPerfil` recusa o `sub` excluído (`404`, como o contrato de `/v1/me` já prevê) e a republicação do `user.created` dos familiares pula esses `sub`.
 
 ## Testes
 

@@ -27,6 +27,12 @@ spring:
     password: ${RABBITMQ_PASSWORD}
     virtual-host: ${RABBITMQ_VHOST:/}
     publisher-confirm-type: correlated
+    listener:
+      simple:
+        # O consumidor confirma (ack) só depois de a exclusão terminar; rejeição vai para a dead-letter, sem requeue.
+        acknowledge-mode: manual
+        default-requeue-rejected: false
+        prefetch: ${IDENTITY_MENSAGERIA_PREFETCH:10}
 
   data:
     redis:
@@ -84,6 +90,13 @@ identity:
     client-id: ${KEYCLOAK_CLIENT_ID:si-identity-service}
     client-secret: ${KEYCLOAK_CLIENT_SECRET:}
     dominio-email-idoso: ${KEYCLOAK_DOMINIO_EMAIL_IDOSO:idoso.seniorinsight.invalid}
+  exclusao:
+    # Exclusão da conta a pedido do report-service (HU-022): fila identity.q ligada à si.events por esta routing key.
+    routing-key: ${IDENTITY_EXCLUSAO_ROUTING_KEY:lgpd.erasure.requested}
+    # Keycloak ou banco fora: tenta de novo até este total (a primeira conta), esperando o intervalo entre elas;
+    # depois disso a mensagem vai para identity.dlq com um log de erro.
+    tentativas: ${IDENTITY_EXCLUSAO_TENTATIVAS:5}
+    intervalo: ${IDENTITY_EXCLUSAO_INTERVALO:PT30S}
   care-service:
     url: ${CARE_SERVICE_URL:http://localhost:8081}
     papeis-administrador: ${CARE_SERVICE_PAPEIS_ADMINISTRADOR:ADMINISTRADOR}

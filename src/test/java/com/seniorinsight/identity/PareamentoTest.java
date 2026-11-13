@@ -1,6 +1,7 @@
 package com.seniorinsight.identity;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.within;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -22,9 +23,12 @@ import java.util.UUID;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.seniorinsight.identity.application.exclusao.ExcluirConta;
 import com.seniorinsight.identity.application.porta.saida.RedeDoIdoso;
 import com.seniorinsight.identity.application.porta.saida.RepositorioCodigosPareamento;
 import com.seniorinsight.identity.domain.pareamento.CodigoPareamento;
+import com.seniorinsight.identity.domain.exclusao.PedidoExclusao;
+import com.seniorinsight.identity.domain.perfil.TipoPerfil;
 import dasniko.testcontainers.keycloak.KeycloakContainer;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -41,6 +45,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 
 /**
@@ -55,6 +60,7 @@ class PareamentoTest {
 
     private static final String SENHA = "senha-de-teste";
     private static final String FAMILIAR = "ana.souza@example.com";
+    private static final String FAMILIAR_EXCLUIDO = "carlos.lima@example.com";
 
     static final KeycloakContainer KEYCLOAK = new KeycloakContainer("quay.io/keycloak/keycloak:26.3")
             .withFeaturesEnabled("token-exchange:v1")
@@ -82,6 +88,9 @@ class PareamentoTest {
 
     @Autowired
     RepositorioCodigosPareamento codigos;
+
+    @Autowired
+    ExcluirConta excluirConta;
 
     @MockitoBean
     RedeDoIdoso rede;
@@ -231,6 +240,39 @@ class PareamentoTest {
                 Integer.class, UUID.fromString(perfilId))).isEqualTo(1);
     }
 
+    /** HU-022: depois do evento o idoso não renova mais o acesso (o usuário some do Keycloak). */
+    @Test
+    void idosoExcluidoNaoConsegueMaisRenovarOAcesso() throws Exception {
+        JsonNode tokens = resgatar(codigoGerado("Francisca", null), "aparelho-exclusao")
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString().transform(this::json).get("tokens");
+        String refreshToken = tokens.get("refreshToken").asText();
+        String sub = subDe(tokens.get("accessToken").asText());
+        assertThat(renovar(refreshToken).has("access_token")).isTrue();
+
+        excluirConta.executar(new PedidoExclusao(UUID.randomUUID(), TipoPerfil.IDOSO, sub));
+
+        assertThatThrownBy(() -> renovar(refreshToken)).isInstanceOf(HttpClientErrorException.class);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM perfil WHERE keycloak_sub = ?", Integer.class, sub))
+                .isZero();
+    }
+
+    /** HU-022: o familiar não entra mais e o access token que ainda vale não recria o perfil. */
+    @Test
+    void familiarExcluidoNaoEntraMaisENemRecriaOPerfilComOTokenAindaValido() throws Exception {
+        String token = tokenDe(FAMILIAR_EXCLUIDO);
+        mvc.perform(get("/v1/me").header(HttpHeaders.AUTHORIZATION, "Bearer " + token)).andExpect(status().isOk());
+        String sub = subDe(token);
+
+        excluirConta.executar(new PedidoExclusao(UUID.randomUUID(), TipoPerfil.FAMILIAR, sub));
+
+        assertThatThrownBy(() -> tokenDe(FAMILIAR_EXCLUIDO)).isInstanceOf(HttpClientErrorException.class);
+        mvc.perform(get("/v1/me").header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isNotFound());
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM perfil WHERE keycloak_sub = ?", Integer.class, sub))
+                .isZero();
+    }
+
     @Test
     void requisicaoForaDoContratoResponde400() throws Exception {
         mvc.perform(post("/v1/pareamentos/resgates").contentType(MediaType.APPLICATION_JSON)
@@ -283,6 +325,21 @@ class PareamentoTest {
 
     private String subDe(String token) {
         return json(new String(Base64.getUrlDecoder().decode(token.split("\\.")[1]))).get("sub").asText();
+    }
+
+    /** Renova o acesso com o refresh token do idoso, no client confidencial do serviço que o emitiu. */
+    private static JsonNode renovar(String refreshToken) {
+        MultiValueMap<String, String> formulario = new LinkedMultiValueMap<>();
+        formulario.add("grant_type", "refresh_token");
+        formulario.add("client_id", "si-identity-service");
+        formulario.add("client_secret", "segredo-de-teste");
+        formulario.add("refresh_token", refreshToken);
+        return RestClient.create().post()
+                .uri(issuer() + "/protocol/openid-connect/token")
+                .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                .body(formulario)
+                .retrieve()
+                .body(JsonNode.class);
     }
 
     /** Password grant no client público de teste (só existe no realm de teste). */
