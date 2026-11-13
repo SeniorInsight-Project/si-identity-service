@@ -24,6 +24,14 @@ public interface RepositorioPerfis {
     /** Grava o nome e o {@code atualizadoEm} do perfil. */
     void atualizarNome(Perfil perfil);
 
+    /**
+     * Grava o {@code idosoId} e o {@code atualizadoEm} do perfil, só se o perfil ainda não tem {@code idosoId}. Exige
+     * transação.
+     *
+     * @return {@code false} se o perfil já tinha {@code idosoId} (outra transação preencheu antes)
+     */
+    boolean preencherIdosoId(Perfil perfil);
+
     /** Apaga o perfil. Exige transação; as sessões de aparelho dele têm de ter sido apagadas antes. */
     void excluir(UUID perfilId);
 

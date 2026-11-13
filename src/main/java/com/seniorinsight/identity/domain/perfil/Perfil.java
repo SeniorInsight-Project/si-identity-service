@@ -50,6 +50,14 @@ public final class Perfil {
         return new Perfil(UUID.randomUUID(), keycloakSub, TipoPerfil.IDOSO, nome, null, idosoId, agora, agora);
     }
 
+    /**
+     * Cópia do perfil com o {@code idosoId} do care-service, para o perfil que nasceu sem ele; só o {@code idosoId} e o
+     * {@code atualizadoEm} mudam.
+     */
+    public Perfil comIdosoId(UUID novoIdosoId, Instant agora) {
+        return new Perfil(id, keycloakSub, tipo, nome, email, novoIdosoId, criadoEm, agora);
+    }
+
     /** Cópia do perfil com o nome novo; só o nome e o {@code atualizadoEm} mudam. */
     public Perfil comNome(String novoNome, Instant agora) {
         return new Perfil(id, keycloakSub, tipo, novoNome, email, idosoId, criadoEm, agora);

@@ -44,6 +44,29 @@ class PerfilTest {
     }
 
     @Test
+    void comIdosoIdPreencheOCampoEAtualizaOMomentoMantendoOResto() {
+        UUID idosoId = UUID.randomUUID();
+        Perfil perfil = Perfil.novoIdoso("sub-idoso", "Maria", null, AGORA);
+
+        Perfil preenchido = perfil.comIdosoId(idosoId, AGORA.plusSeconds(60));
+
+        assertThat(preenchido.idosoId()).isEqualTo(idosoId);
+        assertThat(preenchido.atualizadoEm()).isEqualTo(AGORA.plusSeconds(60));
+        assertThat(preenchido.id()).isEqualTo(perfil.id());
+        assertThat(preenchido.keycloakSub()).isEqualTo("sub-idoso");
+        assertThat(preenchido.nome()).isEqualTo("Maria");
+        assertThat(preenchido.criadoEm()).isEqualTo(AGORA);
+    }
+
+    @Test
+    void comIdosoIdEmPerfilDeFamiliarEhRecusado() {
+        Perfil familiar = Perfil.novoFamiliar("sub-ana", "Ana", "ana@example.com", AGORA);
+
+        assertThatThrownBy(() -> familiar.comIdosoId(UUID.randomUUID(), AGORA.plusSeconds(60)))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
     void comNomeMantemOIdosoId() {
         UUID idosoId = UUID.randomUUID();
         Perfil perfil = Perfil.novoIdoso("sub-idoso", "Maria", idosoId, AGORA);

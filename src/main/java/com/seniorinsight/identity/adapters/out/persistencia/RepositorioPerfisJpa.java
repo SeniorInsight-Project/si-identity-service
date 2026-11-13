@@ -41,6 +41,12 @@ class RepositorioPerfisJpa implements RepositorioPerfis {
 
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
+    public boolean preencherIdosoId(Perfil perfil) {
+        return jpa.preencherIdosoId(perfil.id(), perfil.idosoId(), perfil.atualizadoEm()) == 1;
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
     public void excluir(UUID perfilId) {
         jpa.excluir(perfilId);
     }
