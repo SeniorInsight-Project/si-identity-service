@@ -2,11 +2,15 @@ package com.seniorinsight.identity.adapters.out.redis;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 import com.seniorinsight.identity.application.porta.saida.RepositorioCodigosPareamento;
 import com.seniorinsight.identity.domain.pareamento.CodigoPareamento;
+import org.springframework.data.redis.core.Cursor;
+import org.springframework.data.redis.core.ScanOptions;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.stereotype.Component;
@@ -86,6 +90,17 @@ class RepositorioCodigosPareamentoRedis implements RepositorioCodigosPareamento 
             return 1
             """, Long.class);
 
+    /** KEYS: emissor. ARGV: prefixo dos códigos. Apaga o código vigente do emissor e o próprio emissor. */
+    private static final RedisScript<Long> EXCLUIR_DO_EMISSOR = RedisScript.of("""
+            local codigo = redis.call('GET', KEYS[1])
+            if codigo then
+              redis.call('DEL', ARGV[1] .. codigo)
+            end
+            return redis.call('DEL', KEYS[1])
+            """, Long.class);
+
+    private static final int LOTE_DA_VARREDURA = 100;
+    private static final Pattern CARACTERES_DE_PADRAO = Pattern.compile("[\\\\*?\\[\\]]");
     private static final String SEM_IDOSO = "";
 
     private final StringRedisTemplate redis;
@@ -136,6 +151,16 @@ class RepositorioCodigosPareamentoRedis implements RepositorioCodigosPareamento 
         redis.execute(DEVOLVER, chaves(codigo),
                 codigo.codigo(), Long.toString(ttl), codigo.familiarSub(), codigo.nomeIdoso(), idoso(codigo),
                 Long.toString(codigo.expiraEm().toEpochMilli()));
+    }
+
+    @Override
+    public void excluirDoFamiliar(String familiarSub) {
+        String padrao = PREFIXO_EMISSOR + CARACTERES_DE_PADRAO.matcher(familiarSub).replaceAll("\\\\$0") + ":*";
+        List<String> emissores = new ArrayList<>();
+        try (Cursor<String> cursor = redis.scan(ScanOptions.scanOptions().match(padrao).count(LOTE_DA_VARREDURA).build())) {
+            cursor.forEachRemaining(emissores::add);
+        }
+        emissores.forEach(emissor -> redis.execute(EXCLUIR_DO_EMISSOR, List.of(emissor), PREFIXO));
     }
 
     private static List<String> chaves(CodigoPareamento codigo) {

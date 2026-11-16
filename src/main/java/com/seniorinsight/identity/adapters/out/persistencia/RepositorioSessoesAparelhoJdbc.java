@@ -1,6 +1,7 @@
 package com.seniorinsight.identity.adapters.out.persistencia;
 
 import java.sql.Timestamp;
+import java.util.UUID;
 
 import com.seniorinsight.identity.application.porta.saida.RepositorioSessoesAparelho;
 import com.seniorinsight.identity.domain.pareamento.SessaoAparelho;
@@ -44,6 +45,14 @@ class RepositorioSessoesAparelhoJdbc implements RepositorioSessoesAparelho {
                 .param("plataforma", sessao.plataforma().name())
                 .param("pareadoPor", sessao.pareadoPor())
                 .param("criadoEm", Timestamp.from(sessao.criadoEm()))
+                .update();
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void excluirDoPerfil(UUID perfilId) {
+        jdbc.sql("DELETE FROM sessao_aparelho WHERE perfil_id = :perfilId")
+                .param("perfilId", perfilId)
                 .update();
     }
 }

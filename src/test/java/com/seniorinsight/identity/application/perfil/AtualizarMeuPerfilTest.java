@@ -92,7 +92,7 @@ class AtualizarMeuPerfilTest {
 
     private static Perfil perfil() {
         Instant criadoEm = Instant.parse("2026-10-31T12:00:00Z");
-        return new Perfil(UUID.randomUUID(), SUB, TipoPerfil.FAMILIAR, "Ana Souza", "ana@example.com", criadoEm,
-                criadoEm);
+        return new Perfil(UUID.randomUUID(), SUB, TipoPerfil.FAMILIAR, "Ana Souza", "ana@example.com", null,
+                criadoEm, criadoEm);
     }
 }

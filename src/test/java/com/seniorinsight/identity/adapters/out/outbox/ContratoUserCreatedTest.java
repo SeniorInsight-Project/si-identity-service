@@ -6,6 +6,7 @@ import static org.mockito.Mockito.verify;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.UUID;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -38,6 +39,37 @@ class ContratoUserCreatedTest {
                 "Ana Souza", "ana@example.com", Instant.now().truncatedTo(ChronoUnit.MICROS)));
 
         assertThat(CONTRATO.validar(payload)).isEmpty();
+    }
+
+    @Test
+    void payloadDoIdosoLevaOIdosoIdEValidaContraOContrato() throws Exception {
+        UUID idosoId = UUID.randomUUID();
+        String payload = payloadGravado(Perfil.novoIdoso("sub-idoso", "Maria", idosoId, Instant.now()));
+
+        assertThat(CONTRATO.validar(payload)).isEmpty();
+        assertThat(new ObjectMapper().readTree(payload).at("/data/idosoId").asText()).isEqualTo(idosoId.toString());
+    }
+
+    @Test
+    void payloadDoIdosoSemIdosoIdTemIdosoIdNuloEValidaContraOContrato() throws Exception {
+        String payload = payloadGravado(Perfil.novoIdoso("sub-idoso", "Maria", null, Instant.now()));
+
+        assertThat(CONTRATO.validar(payload)).isEmpty();
+        JsonNode idosoId = new ObjectMapper().readTree(payload).at("/data/idosoId");
+        assertThat(idosoId.isNull()).isTrue();
+    }
+
+    @Test
+    void payloadDoFamiliarNaoTemIdosoId() throws Exception {
+        String payload = payloadGravado(Perfil.novoFamiliar("sub-ana", "Ana", "ana@example.com", Instant.now()));
+
+        assertThat(new ObjectMapper().readTree(payload).at("/data/idosoId").isNull()).isTrue();
+    }
+
+    @Test
+    void exemplosComIdosoIdDoSiContractsSaoValidos() {
+        assertThat(CONTRATO.validar(ValidadorContrato.ler("user.created.v1.valid.json").toString())).isEmpty();
+        assertThat(ValidadorContrato.ler("user.created.v1.valid.json").at("/data/idosoId").isTextual()).isTrue();
     }
 
     @Test

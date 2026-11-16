@@ -18,6 +18,8 @@ import com.seniorinsight.identity.domain.pareamento.CodigoPareamento;
 import com.seniorinsight.identity.domain.pareamento.Plataforma;
 import com.seniorinsight.identity.domain.pareamento.SessaoAparelho;
 import com.seniorinsight.identity.domain.perfil.Perfil;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionOperations;
 
@@ -31,6 +33,8 @@ import org.springframework.transaction.support.TransactionOperations;
  */
 @Service
 public class ResgatarCodigoPareamento {
+
+    private static final Logger log = LoggerFactory.getLogger(ResgatarCodigoPareamento.class);
 
     private final RepositorioCodigosPareamento codigos;
     private final ProvedorIdentidade provedor;
@@ -76,7 +80,9 @@ public class ResgatarCodigoPareamento {
     }
 
     private Resultado registrar(String sub, CodigoPareamento codigo, Comando comando, Instant agora) {
-        Perfil perfil = perfis.buscarPorKeycloakSub(sub).orElseGet(() -> criarPerfil(sub, codigo.nomeIdoso(), agora));
+        Perfil perfil = perfis.buscarPorKeycloakSub(sub)
+                .map(existente -> completarIdosoId(existente, codigo, agora))
+                .orElseGet(() -> criarPerfil(sub, codigo, agora));
         SessaoAparelho sessao = SessaoAparelho.nova(perfil.id(), comando.identificadorAparelho(),
                 comando.plataforma(), codigo.familiarSub(), agora);
         sessoes.registrar(sessao);
@@ -85,8 +91,31 @@ public class ResgatarCodigoPareamento {
         return new Resultado(perfil, sessao.id(), codigo.idosoId(), tokens);
     }
 
-    private Perfil criarPerfil(String sub, String nome, Instant agora) {
-        Perfil novo = Perfil.novoIdoso(sub, nome, agora);
+    /**
+     * Perfil criado antes de o {@code idosoId} existir (ou de o código trazê-lo): preenche o campo, só se estiver vazio,
+     * e publica {@code user.created} de novo, com o {@code idosoId}, para o report-service identificar o titular. Um
+     * {@code idosoId} diferente do gravado não é sobrescrito.
+     */
+    private Perfil completarIdosoId(Perfil existente, CodigoPareamento codigo, Instant agora) {
+        UUID doCodigo = codigo.idosoId();
+        if (doCodigo == null || doCodigo.equals(existente.idosoId())) {
+            return existente;
+        }
+        if (existente.idosoId() != null) {
+            log.warn("O perfil {} já tem o idosoId {}; o idosoId {} do código de pareamento não foi gravado",
+                    existente.id(), existente.idosoId(), doCodigo);
+            return existente;
+        }
+        Perfil preenchido = existente.comIdosoId(doCodigo, agora);
+        if (!perfis.preencherIdosoId(preenchido)) {
+            return existente;
+        }
+        publicador.publicar(UserCreated.de(preenchido));
+        return preenchido;
+    }
+
+    private Perfil criarPerfil(String sub, CodigoPareamento codigo, Instant agora) {
+        Perfil novo = Perfil.novoIdoso(sub, codigo.nomeIdoso(), codigo.idosoId(), agora);
         if (perfis.inserirSeAusente(novo)) {
             publicador.publicar(UserCreated.de(novo));
             return novo;

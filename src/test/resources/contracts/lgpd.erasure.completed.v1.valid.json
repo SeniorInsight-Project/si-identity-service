@@ -1,0 +1,14 @@
+{
+  "specversion": "1.0",
+  "id": "176f6ee8-3920-4ea4-b558-b50ee934825a",
+  "source": "/telemetry-service",
+  "type": "lgpd.erasure.completed",
+  "time": "2026-11-08T15:30:00Z",
+  "datacontenttype": "application/json",
+  "dataschema": "https://raw.githubusercontent.com/SeniorInsight-Project/si-contracts/main/events/lgpd.erasure.completed.v1.json",
+  "subject": "44b69553-caa4-48a5-9e4b-22da0c4f2090",
+  "data": {
+    "protocolo": "44b69553-caa4-48a5-9e4b-22da0c4f2090",
+    "servico": "telemetry-service"
+  }
+}

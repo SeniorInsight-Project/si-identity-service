@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.time.Instant;
@@ -15,6 +16,7 @@ import java.util.UUID;
 
 import com.seniorinsight.identity.application.porta.saida.PublicadorEventos;
 import com.seniorinsight.identity.application.porta.saida.RepositorioPerfis;
+import com.seniorinsight.identity.application.porta.saida.RepositorioTitularesExcluidos;
 import com.seniorinsight.identity.domain.evento.UserCreated;
 import com.seniorinsight.identity.domain.perfil.Perfil;
 import com.seniorinsight.identity.domain.perfil.TipoPerfil;
@@ -27,7 +29,8 @@ class ObterOuCriarPerfilTest {
 
     private final RepositorioPerfis repositorio = mock(RepositorioPerfis.class);
     private final PublicadorEventos publicador = mock(PublicadorEventos.class);
-    private final ObterOuCriarPerfil casoDeUso = new ObterOuCriarPerfil(repositorio, publicador);
+    private final RepositorioTitularesExcluidos excluidos = mock(RepositorioTitularesExcluidos.class);
+    private final ObterOuCriarPerfil casoDeUso = new ObterOuCriarPerfil(repositorio, publicador, excluidos);
 
     @Test
     void perfilExistenteEhDevolvidoSemPublicarEvento() {
@@ -58,7 +61,7 @@ class ObterOuCriarPerfilTest {
         ArgumentCaptor<UserCreated> evento = ArgumentCaptor.forClass(UserCreated.class);
         verify(publicador).publicar(evento.capture());
         assertThat(evento.getValue()).isEqualTo(new UserCreated(perfil.id(), SUB, TipoPerfil.FAMILIAR, "Ana Souza",
-                "ana@example.com", perfil.criadoEm()));
+                "ana@example.com", perfil.criadoEm(), null));
         assertThat(evento.getValue().tipoAgregado()).isEqualTo("perfil");
         assertThat(evento.getValue().agregadoId()).isEqualTo(perfil.id());
         assertThat(evento.getValue().tipoEvento()).isEqualTo("user.created");
@@ -101,13 +104,35 @@ class ObterOuCriarPerfilTest {
         verify(publicador, never()).publicar(any());
     }
 
+    @Test
+    void titularExcluidoNaoTemOPerfilRecriadoPorUmTokenAindaValido() {
+        when(repositorio.buscarPorKeycloakSub(SUB)).thenReturn(Optional.empty());
+        when(excluidos.bloquearEVerificarExclusao(SUB)).thenReturn(true);
+
+        assertThatThrownBy(() -> casoDeUso.executar(familiar("Ana Souza", "ana", "ana@example.com")))
+                .isInstanceOf(TitularExcluido.class)
+                .isInstanceOf(PerfilNaoEncontrado.class);
+
+        verify(repositorio, never()).inserirSeAusente(any());
+        verify(publicador, never()).publicar(any());
+    }
+
+    @Test
+    void perfilExistenteNaoConsultaOsTitularesExcluidos() {
+        when(repositorio.buscarPorKeycloakSub(SUB)).thenReturn(Optional.of(perfil(SUB)));
+
+        casoDeUso.executar(familiar("Ana Souza", "ana", "ana@example.com"));
+
+        verifyNoInteractions(excluidos);
+    }
+
     private static ObterOuCriarPerfil.Comando familiar(String nome, String nomeUsuario, String email) {
         return new ObterOuCriarPerfil.Comando(SUB, Set.of("familiar", "offline_access"), nome, nomeUsuario, email);
     }
 
     private static Perfil perfil(String sub) {
         Instant criadoEm = Instant.parse("2026-10-31T12:00:00Z");
-        return new Perfil(UUID.randomUUID(), sub, TipoPerfil.FAMILIAR, "Ana Souza", "ana@example.com", criadoEm,
-                criadoEm);
+        return new Perfil(UUID.randomUUID(), sub, TipoPerfil.FAMILIAR, "Ana Souza", "ana@example.com", null,
+                criadoEm, criadoEm);
     }
 }

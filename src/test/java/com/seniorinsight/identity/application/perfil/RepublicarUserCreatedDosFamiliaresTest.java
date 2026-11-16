@@ -14,6 +14,7 @@ import java.util.UUID;
 
 import com.seniorinsight.identity.application.porta.saida.PublicadorEventos;
 import com.seniorinsight.identity.application.porta.saida.RepositorioPerfis;
+import com.seniorinsight.identity.application.porta.saida.RepositorioTitularesExcluidos;
 import com.seniorinsight.identity.domain.evento.UserCreated;
 import com.seniorinsight.identity.domain.perfil.Perfil;
 import com.seniorinsight.identity.domain.perfil.TipoPerfil;
@@ -27,8 +28,9 @@ class RepublicarUserCreatedDosFamiliaresTest {
     private final RepositorioPerfis repositorio = mock(RepositorioPerfis.class);
     private final PublicadorEventos publicador = mock(PublicadorEventos.class);
     private final TransactionTemplate transacao = mock(TransactionTemplate.class);
+    private final RepositorioTitularesExcluidos excluidos = mock(RepositorioTitularesExcluidos.class);
     private final RepublicarUserCreatedDosFamiliares casoDeUso =
-            new RepublicarUserCreatedDosFamiliares(repositorio, publicador, transacao);
+            new RepublicarUserCreatedDosFamiliares(repositorio, publicador, excluidos, transacao);
 
     RepublicarUserCreatedDosFamiliaresTest() {
         when(transacao.execute(any())).thenAnswer(i -> i.<TransactionCallback<?>>getArgument(0).doInTransaction(null));
@@ -53,6 +55,26 @@ class RepublicarUserCreatedDosFamiliaresTest {
                 .containsExactly("sub-a", "sub-b", "sub-c");
         // O segundo lote continua depois do último id do primeiro.
         verify(repositorio).listarPorTipoApos(TipoPerfil.FAMILIAR, b.id(), 2);
+    }
+
+    @Test
+    void naoRepublicaNadaDeTitularExcluidoEContinuaOsLotesDepoisDele() {
+        Perfil a = familiar("sub-a");
+        Perfil excluido = familiar("sub-excluido");
+        Perfil c = familiar("sub-c");
+        when(excluidos.bloquearEVerificarExclusao("sub-excluido")).thenReturn(true);
+        when(repositorio.listarPorTipoApos(eq(TipoPerfil.FAMILIAR), any(), eq(2)))
+                .thenReturn(List.of(a, excluido))
+                .thenReturn(List.of(c))
+                .thenReturn(List.of());
+
+        int total = casoDeUso.executar(2);
+
+        assertThat(total).isEqualTo(2);
+        ArgumentCaptor<UserCreated> eventos = ArgumentCaptor.forClass(UserCreated.class);
+        verify(publicador, org.mockito.Mockito.times(2)).publicar(eventos.capture());
+        assertThat(eventos.getAllValues()).extracting(UserCreated::keycloakSub).containsExactly("sub-a", "sub-c");
+        verify(repositorio).listarPorTipoApos(TipoPerfil.FAMILIAR, excluido.id(), 2);
     }
 
     @Test

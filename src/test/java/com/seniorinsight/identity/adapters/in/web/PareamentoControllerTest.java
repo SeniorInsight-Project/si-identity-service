@@ -70,7 +70,7 @@ class PareamentoControllerTest {
     }
 
     private static ResgatarCodigoPareamento.Resultado resultado(UUID sessaoId, UUID idosoId) {
-        Perfil perfil = Perfil.novoIdoso("sub-idoso", "Maria", Instant.now().truncatedTo(ChronoUnit.MICROS));
+        Perfil perfil = Perfil.novoIdoso("sub-idoso", "Maria", null, Instant.now().truncatedTo(ChronoUnit.MICROS));
         return new ResgatarCodigoPareamento.Resultado(perfil, sessaoId, idosoId, TOKENS);
     }
 }

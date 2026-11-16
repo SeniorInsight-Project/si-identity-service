@@ -26,6 +26,9 @@ public interface RepositorioCodigosPareamento {
     /** Desfaz um {@link #consumir} cujo resgate falhou depois (Keycloak ou banco fora), se nada mudou nesse meio-tempo. */
     void devolver(CodigoPareamento codigo, Duration retencao);
 
+    /** Apaga os códigos vigentes gerados pelo familiar, para nenhum deles ser resgatado depois da exclusão dele. */
+    void excluirDoFamiliar(String familiarSub);
+
     sealed interface Consumo {
         record Resgatado(CodigoPareamento codigo) implements Consumo {
         }

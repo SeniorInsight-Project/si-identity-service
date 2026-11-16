@@ -6,6 +6,7 @@ import java.util.Set;
 
 import com.seniorinsight.identity.application.porta.saida.PublicadorEventos;
 import com.seniorinsight.identity.application.porta.saida.RepositorioPerfis;
+import com.seniorinsight.identity.application.porta.saida.RepositorioTitularesExcluidos;
 import com.seniorinsight.identity.domain.evento.UserCreated;
 import com.seniorinsight.identity.domain.perfil.Perfil;
 import org.springframework.stereotype.Service;
@@ -14,7 +15,8 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * Perfil do usuário autenticado. No primeiro acesso de quem tem o papel {@code familiar} (dado pelo Keycloak a quem
  * se cadastra), cria o perfil FAMILIAR e publica {@code user.created} na mesma transação. O perfil IDOSO nasce no
- * pareamento (HU-007), não aqui.
+ * pareamento (HU-007), não aqui. Quem teve a conta excluída (HU-022) não recria o perfil, mesmo com um access token
+ * ainda válido.
  */
 @Service
 public class ObterOuCriarPerfil {
@@ -23,10 +25,13 @@ public class ObterOuCriarPerfil {
 
     private final RepositorioPerfis repositorio;
     private final PublicadorEventos publicador;
+    private final RepositorioTitularesExcluidos excluidos;
 
-    public ObterOuCriarPerfil(RepositorioPerfis repositorio, PublicadorEventos publicador) {
+    public ObterOuCriarPerfil(RepositorioPerfis repositorio, PublicadorEventos publicador,
+                              RepositorioTitularesExcluidos excluidos) {
         this.repositorio = repositorio;
         this.publicador = publicador;
+        this.excluidos = excluidos;
     }
 
     @Transactional
@@ -36,6 +41,9 @@ public class ObterOuCriarPerfil {
     }
 
     private Perfil criar(Comando comando) {
+        if (excluidos.bloquearEVerificarExclusao(comando.keycloakSub())) {
+            throw new TitularExcluido(comando.keycloakSub());
+        }
         if (!comando.papeis().contains(PAPEL_FAMILIAR)) {
             throw new PerfilNaoEncontrado(comando.keycloakSub());
         }
