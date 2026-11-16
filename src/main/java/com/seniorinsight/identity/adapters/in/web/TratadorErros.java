@@ -8,6 +8,8 @@ import com.seniorinsight.identity.application.pareamento.CodigoNaoEncontrado;
 import com.seniorinsight.identity.application.pareamento.FamiliarSemVinculo;
 import com.seniorinsight.identity.application.pareamento.IdentidadeIndisponivel;
 import com.seniorinsight.identity.application.pareamento.RedeIndisponivel;
+import com.seniorinsight.identity.application.pareamento.RenovacaoNaoAutorizada;
+import com.seniorinsight.identity.application.pareamento.SessaoNaoEncontrada;
 import com.seniorinsight.identity.application.perfil.NomeInvalido;
 import com.seniorinsight.identity.application.perfil.PerfilNaoEncontrado;
 import jakarta.servlet.http.HttpServletRequest;
@@ -25,9 +27,14 @@ class TratadorErros {
 
     private static final Logger log = LoggerFactory.getLogger(TratadorErros.class);
 
-    @ExceptionHandler({PerfilNaoEncontrado.class, CodigoNaoEncontrado.class})
+    @ExceptionHandler({PerfilNaoEncontrado.class, CodigoNaoEncontrado.class, SessaoNaoEncontrada.class})
     ResponseEntity<Erro> naoEncontrado(RuntimeException e, HttpServletRequest requisicao) {
         return erro(HttpStatus.NOT_FOUND, e.getMessage(), requisicao);
+    }
+
+    @ExceptionHandler(RenovacaoNaoAutorizada.class)
+    ResponseEntity<Erro> naoAutorizado(RenovacaoNaoAutorizada e, HttpServletRequest requisicao) {
+        return erro(HttpStatus.UNAUTHORIZED, e.getMessage(), requisicao);
     }
 
     @ExceptionHandler(FamiliarSemVinculo.class)

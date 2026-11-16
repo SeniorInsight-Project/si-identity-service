@@ -1,16 +1,18 @@
 package com.seniorinsight.identity.adapters.out.persistencia;
 
 import java.sql.Timestamp;
+import java.util.Optional;
 import java.util.UUID;
 
 import com.seniorinsight.identity.application.porta.saida.RepositorioSessoesAparelho;
+import com.seniorinsight.identity.domain.pareamento.Plataforma;
 import com.seniorinsight.identity.domain.pareamento.SessaoAparelho;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-/** Tabela {@code sessao_aparelho}. SQL direto: a sessão só é gravada aqui, nunca lida como entidade. */
+/** Tabela {@code sessao_aparelho}. SQL direto para as operações de pareamento e renovação. */
 @Component
 class RepositorioSessoesAparelhoJdbc implements RepositorioSessoesAparelho {
 
@@ -46,6 +48,29 @@ class RepositorioSessoesAparelhoJdbc implements RepositorioSessoesAparelho {
                 .param("pareadoPor", sessao.pareadoPor())
                 .param("criadoEm", Timestamp.from(sessao.criadoEm()))
                 .update();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<SessaoAparelho> buscarPorId(UUID id) {
+        return jdbc.sql("""
+                        SELECT id, perfil_id, identificador_aparelho, plataforma, pareado_por, criado_em, revogado_em
+                          FROM sessao_aparelho
+                         WHERE id = :id
+                        """)
+                .param("id", id)
+                .query((rs, rowNum) -> {
+                    Timestamp revogadoEm = rs.getTimestamp("revogado_em");
+                    return new SessaoAparelho(
+                            rs.getObject("id", UUID.class),
+                            rs.getObject("perfil_id", UUID.class),
+                            rs.getString("identificador_aparelho"),
+                            Plataforma.valueOf(rs.getString("plataforma")),
+                            rs.getString("pareado_por"),
+                            rs.getTimestamp("criado_em").toInstant(),
+                            revogadoEm == null ? null : revogadoEm.toInstant());
+                })
+                .optional();
     }
 
     @Override

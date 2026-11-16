@@ -27,6 +27,19 @@ public interface ProvedorIdentidade {
     /** Emite os tokens do usuário por token exchange (impersonação pela service account do serviço). */
     Tokens emitirTokens(String keycloakSub);
 
+    /**
+     * Renova os tokens no Keycloak com {@code grant_type=refresh_token} usando as credenciais do serviço.
+     *
+     * @throws com.seniorinsight.identity.application.pareamento.RenovacaoNaoAutorizada se o refresh token for
+     *                                                                                   recusado ({@code invalid_grant})
+     * @throws com.seniorinsight.identity.application.pareamento.IdentidadeIndisponivel se o Keycloak falhar ou estiver
+     *                                                                                  fora do ar
+     */
+    TokensRenovados renovarTokens(String refreshToken);
+
     record Tokens(String accessToken, String refreshToken, long expiresIn, Long refreshExpiresIn) {
+    }
+
+    record TokensRenovados(String keycloakSub, Tokens tokens) {
     }
 }

@@ -10,7 +10,7 @@ import java.util.UUID;
  * @param pareadoPor claim {@code sub} do familiar que gerou o código resgatado
  */
 public record SessaoAparelho(UUID id, UUID perfilId, String identificadorAparelho, Plataforma plataforma,
-                             String pareadoPor, Instant criadoEm) {
+                             String pareadoPor, Instant criadoEm, Instant revogadoEm) {
 
     public SessaoAparelho {
         Objects.requireNonNull(id, "id");
@@ -21,8 +21,13 @@ public record SessaoAparelho(UUID id, UUID perfilId, String identificadorAparelh
         Objects.requireNonNull(criadoEm, "criadoEm");
     }
 
+    public boolean revogada() {
+        return revogadoEm != null;
+    }
+
     public static SessaoAparelho nova(UUID perfilId, String identificadorAparelho, Plataforma plataforma,
                                       String pareadoPor, Instant agora) {
-        return new SessaoAparelho(UUID.randomUUID(), perfilId, identificadorAparelho, plataforma, pareadoPor, agora);
+        return new SessaoAparelho(UUID.randomUUID(), perfilId, identificadorAparelho, plataforma, pareadoPor, agora,
+                null);
     }
 }

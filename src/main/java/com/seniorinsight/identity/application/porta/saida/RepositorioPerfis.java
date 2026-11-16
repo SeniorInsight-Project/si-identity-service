@@ -9,6 +9,8 @@ import com.seniorinsight.identity.domain.perfil.TipoPerfil;
 
 public interface RepositorioPerfis {
 
+    Optional<Perfil> buscarPorId(UUID id);
+
     Optional<Perfil> buscarPorKeycloakSub(String keycloakSub);
 
     /**

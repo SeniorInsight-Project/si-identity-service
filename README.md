@@ -57,9 +57,10 @@ O usuário do banco precisa poder criar o schema `identity` (ou o schema precisa
 | `GET /v1/me` — perfil do usuário autenticado (ver abaixo) | token do Keycloak |
 | `POST /v1/pareamentos/codigos` — gera o código de pareamento do aparelho do idoso | token com a role `familiar` |
 | `POST /v1/pareamentos/resgates` — resgata o código no aparelho do idoso e devolve os tokens | público |
+| `POST /v1/pareamentos/sessoes/{sessaoAparelhoId}/renovacoes` — renova os tokens da sessão do aparelho do idoso | público |
 | todo o resto | token do Keycloak |
 
-No gateway, `/api/v1/identity/**` é roteado para `/v1/**` deste serviço: o app chama `GET /api/v1/identity/me`, `POST /api/v1/identity/pareamentos/codigos` e `POST /api/v1/identity/pareamentos/resgates`.
+No gateway, `/api/v1/identity/**` é roteado para `/v1/**` deste serviço: o app chama `GET /api/v1/identity/me`, `POST /api/v1/identity/pareamentos/codigos`, `POST /api/v1/identity/pareamentos/resgates` e `POST /api/v1/identity/pareamentos/sessoes/{sessaoAparelhoId}/renovacoes`.
 
 ### `GET /v1/me`
 
@@ -87,8 +88,14 @@ Rotas e schemas do contrato `openapi/identity-v1.yaml`. Os erros usam o corpo pa
 
 - Cria (ou reaproveita, quando o código tem `idosoId`) o usuário do idoso no Keycloak e o perfil `IDOSO` com `email = null` e, quando o código tem `idosoId`, com esse id guardado em `perfil.idoso_id`. Quando o perfil é criado, `user.created` vai para a outbox na mesma transação. Se o perfil já existia sem `idosoId` e o código traz um, o campo é preenchido (só quando está vazio) e um novo `user.created` do perfil vai para a outbox; um `idosoId` diferente do já gravado não é sobrescrito e fica registrado em log.
 - Registra a sessão em `sessao_aparelho` (quem pareou fica em `pareado_por`). Parear de novo o mesmo aparelho do mesmo idoso revoga a sessão anterior (`revogado_em`).
-- `tokens` vem do token exchange V1 do Keycloak (ADR 0001). O refresh token é do client `si-identity-service`, então o app ainda não renova sozinho: ver as consequências na ADR.
+- `tokens` vem do token exchange V1 do Keycloak (ADR 0001). O refresh token é do client `si-identity-service`, então o app renova pela rota `POST /v1/pareamentos/sessoes/{sessaoAparelhoId}/renovacoes`.
 - `404` código inexistente (ou substituído), `409` já resgatado, `410` expirado, `400` corpo fora do contrato, `503` Keycloak fora.
+
+**`POST /v1/pareamentos/sessoes/{sessaoAparelhoId}/renovacoes`** (pública): corpo `{"refreshToken": "..."}`, resposta `200` com `Tokens`.
+
+- Confere se a sessão existe (`404`) e não foi revogada (`401`).
+- Renova no Keycloak com `grant_type=refresh_token` usando as credenciais do `si-identity-service` (`invalid_grant` → `401`, Keycloak fora → `503`).
+- Garante que o `sub` do novo access token é o `keycloak_sub` do perfil dono da sessão (`401` se divergir).
 
 **Redis**: `identity:pairing:{codigo}` guarda o código pendente (hash com familiar, nome, `idosoId` e `expiraEm`) com TTL de validade + retenção. Gerar, resgatar e devolver são scripts Lua atômicos. O resgate apaga a chave e grava `identity:pairing:resgatado:{codigo}` na mesma operação, então dois resgates simultâneos não passam. Se o Keycloak ou o banco falharem depois disso, o código volta para o Redis e o idoso pode tentar de novo. Por `IDENTITY_PAREAMENTO_RETENCAO` (padrão `PT24H`) depois de vencido ou usado, o código ainda responde `410`/`409` em vez de `404`. `identity:pairing:emissor:{familiarSub}:{idosoId|novo}` aponta o código vigente de cada familiar para cada idoso.
 
