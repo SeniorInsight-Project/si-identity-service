@@ -16,8 +16,8 @@ import org.springframework.security.web.SecurityFilterChain;
 
 /**
  * Resource server: valida o JWT emitido pelo Keycloak ({@code spring.security.oauth2.resourceserver.jwt.issuer-uri})
- * e não tem login próprio. São públicos o health do actuator, o Swagger e o resgate do código de
- * pareamento; gerar o código exige a role {@code familiar}.
+ * e não tem login próprio. São públicos o health do actuator, o Swagger, o resgate do código de pareamento e a
+ * renovação da sessão do aparelho; gerar o código exige a role {@code familiar}.
  */
 @Configuration(proxyBeanMethods = false)
 public class SegurancaConfig {
@@ -39,8 +39,9 @@ public class SegurancaConfig {
                 .sessionManagement(sessao -> sessao.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(rotas -> rotas
                         .requestMatchers(ROTAS_PUBLICAS).permitAll()
-                        // O app do idoso ainda não tem conta quando resgata o código.
+                        // O app do idoso ainda não tem conta quando resgata o código, e na renovação o access token pode estar vencido.
                         .requestMatchers(HttpMethod.POST, "/v1/pareamentos/resgates").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/v1/pareamentos/sessoes/*/renovacoes").permitAll()
                         .requestMatchers(HttpMethod.POST, "/v1/pareamentos/codigos").hasRole(PAPEL_FAMILIAR)
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(rs -> rs.jwt(jwt -> jwt.jwtAuthenticationConverter(conversorAutenticacao())))

@@ -130,6 +130,7 @@ class PareamentoTest {
         JsonNode tokens = resultado.get("tokens");
         assertThat(tokens.get("tokenType").asText()).isEqualTo("Bearer");
         assertThat(tokens.get("expiresIn").asLong()).isPositive();
+        assertThat(tokens.get("refreshExpiresIn").asLong()).isEqualTo(1800L);
         assertThat(tokens.get("refreshToken").asText()).isNotBlank();
 
         String accessToken = tokens.get("accessToken").asText();
@@ -289,6 +290,91 @@ class PareamentoTest {
         mvc.perform(post("/v1/pareamentos/codigos").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"nomeIdoso\":\"Maria\"}"))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void idosoRenovaASessaoPelaRotaDeRenovacaoSemAuthorization() throws Exception {
+        JsonNode resgate = resgatar(codigoGerado("Geraldo Silva", null), "aparelho-renovacao")
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString().transform(this::json);
+        UUID sessaoId = UUID.fromString(resgate.get("sessaoAparelhoId").asText());
+        String refreshToken = resgate.at("/tokens/refreshToken").asText();
+
+        JsonNode renovados = renovarPelaRota(sessaoId, refreshToken)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.tokenType").value("Bearer"))
+                .andExpect(jsonPath("$.expiresIn").isNumber())
+                .andExpect(jsonPath("$.refreshExpiresIn").value(1800))
+                .andReturn().getResponse().getContentAsString().transform(this::json);
+
+        mvc.perform(get("/v1/me").header(HttpHeaders.AUTHORIZATION, "Bearer " + renovados.get("accessToken").asText()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(resgate.at("/perfil/id").asText()));
+    }
+
+    @Test
+    void renovacaoComSessaoInexistenteResponde404() throws Exception {
+        renovarPelaRota(UUID.randomUUID(), "qualquer-token")
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void renovacaoComSessaoRevogadaResponde401() throws Exception {
+        UUID idosoId = UUID.randomUUID();
+        when(rede.familiarEhAdministrador(eq(idosoId), anyString(), anyString())).thenReturn(true);
+
+        JsonNode primeira = resgatar(codigoGerado("Irene", idosoId), "aparelho-revogado")
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString().transform(this::json);
+        resgatar(codigoGerado("Irene", idosoId), "aparelho-revogado")
+                .andExpect(status().isOk());
+
+        UUID sessaoAntigaId = UUID.fromString(primeira.get("sessaoAparelhoId").asText());
+        String refreshAntigo = primeira.at("/tokens/refreshToken").asText();
+
+        renovarPelaRota(sessaoAntigaId, refreshAntigo)
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void renovacaoComRefreshTokenInvalidoResponde401() throws Exception {
+        JsonNode resgate = resgatar(codigoGerado("Helena", null), "aparelho-token-invalido")
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString().transform(this::json);
+        UUID sessaoId = UUID.fromString(resgate.get("sessaoAparelhoId").asText());
+
+        renovarPelaRota(sessaoId, "refresh-token-invalido")
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void renovacaoComRefreshTokenDeOutroIdosoResponde401() throws Exception {
+        JsonNode resgateA = resgatar(codigoGerado("Idoso A", null), "aparelho-a")
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString().transform(this::json);
+        JsonNode resgateB = resgatar(codigoGerado("Idoso B", null), "aparelho-b")
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString().transform(this::json);
+
+        UUID sessaoA = UUID.fromString(resgateA.get("sessaoAparelhoId").asText());
+        String refreshB = resgateB.at("/tokens/refreshToken").asText();
+
+        renovarPelaRota(sessaoA, refreshB)
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void renovacaoComCorpoInvalidoResponde400() throws Exception {
+        mvc.perform(post("/v1/pareamentos/sessoes/{id}/renovacoes", UUID.randomUUID())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"refreshToken\":\"   \"}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    private ResultActions renovarPelaRota(UUID sessaoAparelhoId, String refreshToken) throws Exception {
+        return mvc.perform(post("/v1/pareamentos/sessoes/{sessaoAparelhoId}/renovacoes", sessaoAparelhoId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of("refreshToken", refreshToken))));
     }
 
     private String codigoGerado(String nomeIdoso, UUID idosoId) throws Exception {

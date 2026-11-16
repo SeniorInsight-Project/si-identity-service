@@ -5,6 +5,7 @@ import java.util.UUID;
 
 import com.seniorinsight.identity.adapters.in.web.PerfilController.PerfilResponse;
 import com.seniorinsight.identity.application.pareamento.GerarCodigoPareamento;
+import com.seniorinsight.identity.application.pareamento.RenovarSessaoAparelho;
 import com.seniorinsight.identity.application.pareamento.ResgatarCodigoPareamento;
 import com.seniorinsight.identity.application.porta.saida.ProvedorIdentidade.Tokens;
 import com.seniorinsight.identity.domain.pareamento.CodigoPareamento;
@@ -23,6 +24,7 @@ import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -37,10 +39,13 @@ public class PareamentoController {
 
     private final GerarCodigoPareamento gerarCodigo;
     private final ResgatarCodigoPareamento resgatarCodigo;
+    private final RenovarSessaoAparelho renovarSessao;
 
-    public PareamentoController(GerarCodigoPareamento gerarCodigo, ResgatarCodigoPareamento resgatarCodigo) {
+    public PareamentoController(GerarCodigoPareamento gerarCodigo, ResgatarCodigoPareamento resgatarCodigo,
+                                RenovarSessaoAparelho renovarSessao) {
         this.gerarCodigo = gerarCodigo;
         this.resgatarCodigo = resgatarCodigo;
+        this.renovarSessao = renovarSessao;
     }
 
     @PostMapping("/v1/pareamentos/codigos")
@@ -87,6 +92,29 @@ public class PareamentoController {
                 resultado.idosoId(), TokensResponse.de(resultado.tokens()));
     }
 
+    @PostMapping("/v1/pareamentos/sessoes/{sessaoAparelhoId}/renovacoes")
+    @SecurityRequirements
+    @Operation(operationId = "renovarSessaoAparelho",
+            summary = "Renova os tokens da sessão do aparelho do idoso",
+            description = "Rota pública, chamada pelo app do idoso quando o access token vence. Confere que a sessão "
+                    + "não foi revogada, renova os tokens no Keycloak com as credenciais do serviço e garante que o "
+                    + "token pertence ao perfil dono da sessão.")
+    @ApiResponse(responseCode = "200", description = "Tokens renovados")
+    @ApiResponse(responseCode = "400", description = "Dados da requisição inválidos",
+            content = @Content(schema = @Schema(implementation = Erro.class)))
+    @ApiResponse(responseCode = "401", description = "Sessão revogada, refresh token inválido ou de outro perfil",
+            content = @Content(schema = @Schema(implementation = Erro.class)))
+    @ApiResponse(responseCode = "404", description = "Sessão do aparelho não encontrada",
+            content = @Content(schema = @Schema(implementation = Erro.class)))
+    @ApiResponse(responseCode = "503", description = "Keycloak indisponível",
+            content = @Content(schema = @Schema(implementation = Erro.class)))
+    public TokensResponse renovar(@PathVariable UUID sessaoAparelhoId,
+                                  @Valid @RequestBody RenovarSessaoAparelhoRequest requisicao) {
+        Tokens tokens = renovarSessao.executar(
+                new RenovarSessaoAparelho.Comando(sessaoAparelhoId, requisicao.refreshToken()));
+        return TokensResponse.de(tokens);
+    }
+
     @Schema(name = "GerarCodigoPareamentoRequest")
     public record GerarCodigoPareamentoRequest(
             @Schema(requiredMode = Schema.RequiredMode.REQUIRED, minLength = 1, maxLength = 150,
@@ -123,6 +151,12 @@ public class PareamentoController {
                     + "foi gerado sem idosoId.")
             UUID idosoId,
             @Schema(requiredMode = Schema.RequiredMode.REQUIRED) TokensResponse tokens) {
+    }
+
+    @Schema(name = "RenovarSessaoAparelhoRequest")
+    public record RenovarSessaoAparelhoRequest(
+            @Schema(requiredMode = Schema.RequiredMode.REQUIRED, minLength = 1, maxLength = 4096)
+            @NotBlank @Size(max = 4096) String refreshToken) {
     }
 
     @Schema(name = "Tokens")

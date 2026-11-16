@@ -4,16 +4,19 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.contains;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import com.seniorinsight.identity.TesteIntegracao;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
 @TesteIntegracao
@@ -59,5 +62,22 @@ class SegurancaTest {
     @Test
     void demaisEndpointsDoActuatorExigemToken() throws Exception {
         mvc.perform(get("/actuator/info")).andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void renovacaoDeSessaoEPublicaSoNoPost() throws Exception {
+        UUID sessaoId = UUID.randomUUID();
+        mvc.perform(post("/v1/pareamentos/sessoes/{id}/renovacoes", sessaoId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"refreshToken\":\"token-qualquer\"}"))
+                .andExpect(status().isNotFound());
+
+        mvc.perform(get("/v1/pareamentos/sessoes/{id}/renovacoes", sessaoId))
+                .andExpect(status().isUnauthorized())
+                .andExpect(header().string("WWW-Authenticate", "Bearer"));
+
+        mvc.perform(get("/v1/pareamentos/sessoes/{id}", sessaoId))
+                .andExpect(status().isUnauthorized())
+                .andExpect(header().string("WWW-Authenticate", "Bearer"));
     }
 }

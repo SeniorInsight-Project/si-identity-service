@@ -22,6 +22,12 @@ class RepositorioPerfisJpa implements RepositorioPerfis {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public Optional<Perfil> buscarPorId(UUID id) {
+        return jpa.findById(id).map(PerfilEntidade::paraDominio);
+    }
+
+    @Override
     public Optional<Perfil> buscarPorKeycloakSub(String keycloakSub) {
         return jpa.findByKeycloakSub(keycloakSub).map(PerfilEntidade::paraDominio);
     }

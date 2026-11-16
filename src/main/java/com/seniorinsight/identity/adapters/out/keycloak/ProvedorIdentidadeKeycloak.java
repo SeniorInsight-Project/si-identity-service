@@ -1,6 +1,8 @@
 package com.seniorinsight.identity.adapters.out.keycloak;
 
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -8,7 +10,11 @@ import java.util.Set;
 import java.util.UUID;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.seniorinsight.identity.application.pareamento.IdentidadeIndisponivel;
+import com.seniorinsight.identity.application.pareamento.RenovacaoNaoAutorizada;
 import com.seniorinsight.identity.application.porta.saida.ProvedorIdentidade;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpHeaders;
@@ -41,6 +47,7 @@ class ProvedorIdentidadeKeycloak implements ProvedorIdentidade {
     static final String TIPO_REFRESH_TOKEN = "urn:ietf:params:oauth:token-type:refresh_token";
     static final String ROLE_IDOSO = "idoso";
     static final Set<String> ROLES_DO_IDOSO = Set.of(ROLE_IDOSO, "offline_access");
+    private static final ObjectMapper JSON = new ObjectMapper();
 
     private final RestClient rest;
     private final PropriedadesKeycloak propriedades;
@@ -146,6 +153,60 @@ class ProvedorIdentidadeKeycloak implements ProvedorIdentidade {
                     resposta.refreshExpiresIn());
         } catch (RestClientException e) {
             throw new IdentidadeIndisponivel("Falha no token exchange do usuário " + keycloakSub, e);
+        }
+    }
+
+    @Override
+    public TokensRenovados renovarTokens(String refreshToken) {
+        if (propriedades.clientSecret().isBlank()) {
+            throw new IdentidadeIndisponivel("identity.keycloak.client-secret (KEYCLOAK_CLIENT_SECRET) não configurado",
+                    null);
+        }
+        try {
+            MultiValueMap<String, String> formulario = credenciais();
+            formulario.add("grant_type", "refresh_token");
+            formulario.add("refresh_token", refreshToken);
+            RespostaToken resposta = postarToken(formulario);
+            if (resposta == null || resposta.accessToken() == null || resposta.refreshToken() == null) {
+                throw new IdentidadeIndisponivel("A renovação não devolveu access e refresh token", null);
+            }
+            String sub = extrairSub(resposta.accessToken());
+            return new TokensRenovados(sub, new Tokens(resposta.accessToken(), resposta.refreshToken(),
+                    resposta.expiresIn(), resposta.refreshExpiresIn()));
+        } catch (HttpClientErrorException.BadRequest e) {
+            if (ehInvalidGrant(e)) {
+                throw new RenovacaoNaoAutorizada("Refresh token inválido ou expirado.");
+            }
+            throw new IdentidadeIndisponivel("Falha ao renovar tokens no Keycloak", e);
+        } catch (RestClientException e) {
+            throw new IdentidadeIndisponivel("Falha ao renovar tokens no Keycloak", e);
+        }
+    }
+
+    private static boolean ehInvalidGrant(HttpClientErrorException.BadRequest e) {
+        try {
+            JsonNode erro = JSON.readTree(e.getResponseBodyAsString());
+            return "invalid_grant".equals(erro.path("error").asText());
+        } catch (JsonProcessingException ignorado) {
+            return false;
+        }
+    }
+
+    private static String extrairSub(String accessToken) {
+        String[] partes = accessToken.split("\\.");
+        if (partes.length < 2) {
+            throw new IdentidadeIndisponivel("Access token devolvido pelo Keycloak não é um JWT válido", null);
+        }
+        try {
+            byte[] payload = Base64.getUrlDecoder().decode(partes[1]);
+            JsonNode claims = JSON.readTree(new String(payload, StandardCharsets.UTF_8));
+            String sub = claims.path("sub").asText(null);
+            if (sub == null || sub.isBlank()) {
+                throw new IdentidadeIndisponivel("Access token devolvido pelo Keycloak não contém o claim sub", null);
+            }
+            return sub;
+        } catch (IllegalArgumentException | JsonProcessingException e) {
+            throw new IdentidadeIndisponivel("Falha ao ler o claim sub do access token devolvido pelo Keycloak", e);
         }
     }
 

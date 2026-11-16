@@ -13,7 +13,11 @@ import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 
 import com.seniorinsight.identity.TesteIntegracao;
+import com.seniorinsight.identity.application.pareamento.IdentidadeIndisponivel;
+import com.seniorinsight.identity.application.pareamento.RenovacaoNaoAutorizada;
+import com.seniorinsight.identity.application.pareamento.RenovarSessaoAparelho;
 import com.seniorinsight.identity.application.pareamento.ResgatarCodigoPareamento;
+import com.seniorinsight.identity.application.pareamento.SessaoNaoEncontrada;
 import com.seniorinsight.identity.application.porta.saida.ProvedorIdentidade.Tokens;
 import com.seniorinsight.identity.domain.perfil.Perfil;
 import org.junit.jupiter.api.Test;
@@ -34,6 +38,9 @@ class PareamentoControllerTest {
 
     @MockitoBean
     ResgatarCodigoPareamento resgatarCodigo;
+
+    @MockitoBean
+    RenovarSessaoAparelho renovarSessao;
 
     @Test
     void resgateDeCodigoComIdosoIdDevolveOId() throws Exception {
@@ -62,6 +69,77 @@ class PareamentoControllerTest {
         mvc.perform(get("/v3/api-docs"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.components.schemas.ResultadoPareamento.properties.idosoId").exists());
+    }
+
+    @Test
+    void renovacaoComSucessoDevolveTokens() throws Exception {
+        UUID sessaoId = UUID.randomUUID();
+        when(renovarSessao.executar(new RenovarSessaoAparelho.Comando(sessaoId, "refresh-atual")))
+                .thenReturn(TOKENS);
+
+        renovar(sessaoId, "{\"refreshToken\":\"refresh-atual\"}")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accessToken").value("access"))
+                .andExpect(jsonPath("$.refreshToken").value("refresh"))
+                .andExpect(jsonPath("$.expiresIn").value(300))
+                .andExpect(jsonPath("$.refreshExpiresIn").value(1800))
+                .andExpect(jsonPath("$.tokenType").value("Bearer"));
+    }
+
+    @Test
+    void renovacaoComSessaoInexistenteResponde404() throws Exception {
+        UUID sessaoId = UUID.randomUUID();
+        when(renovarSessao.executar(any())).thenThrow(new SessaoNaoEncontrada());
+
+        renovar(sessaoId, "{\"refreshToken\":\"refresh-atual\"}")
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.status").value(404));
+    }
+
+    @Test
+    void renovacaoNaoAutorizadaResponde401() throws Exception {
+        UUID sessaoId = UUID.randomUUID();
+        when(renovarSessao.executar(any())).thenThrow(new RenovacaoNaoAutorizada("Sessão revogada."));
+
+        renovar(sessaoId, "{\"refreshToken\":\"refresh-atual\"}")
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.status").value(401));
+    }
+
+    @Test
+    void renovacaoComKeycloakIndisponivelResponde503() throws Exception {
+        UUID sessaoId = UUID.randomUUID();
+        when(renovarSessao.executar(any())).thenThrow(new IdentidadeIndisponivel("Keycloak fora", null));
+
+        renovar(sessaoId, "{\"refreshToken\":\"refresh-atual\"}")
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.status").value(503));
+    }
+
+    @Test
+    void renovacaoComCorpoInvalidoResponde400() throws Exception {
+        renovar(UUID.randomUUID(), "{}")
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400));
+        renovar(UUID.randomUUID(), "{\"refreshToken\":\"" + "a".repeat(4097) + "\"}")
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400));
+    }
+
+    @Test
+    void openApiDocumentaRotaDeRenovacao() throws Exception {
+        mvc.perform(get("/v3/api-docs"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.paths['/v1/pareamentos/sessoes/{sessaoAparelhoId}/renovacoes'].post.operationId")
+                        .value("renovarSessaoAparelho"))
+                .andExpect(jsonPath("$.components.schemas.RenovarSessaoAparelhoRequest.properties.refreshToken")
+                        .exists());
+    }
+
+    private ResultActions renovar(UUID sessaoId, String corpo) throws Exception {
+        return mvc.perform(post("/v1/pareamentos/sessoes/{sessaoAparelhoId}/renovacoes", sessaoId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(corpo));
     }
 
     private ResultActions resgatar() throws Exception {
